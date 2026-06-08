@@ -179,19 +179,6 @@ function App() {
     }).format(amount);
   };
 
-  // Helper functions for new plans
-  const isSelfTraining = (planType) => {
-    return planType === "Self Training" || planType === "Self + Cardio";
-  };
-
-  const isTraining = (planType) => {
-    return planType === "Training" || planType === "Training + Cardio";
-  };
-
-  const isCardioOnly = (planType) => {
-    return planType === "Cardio";
-  };
-
   return (
     <div className="app-container" style={{
       background: "linear-gradient(135deg,#020617,#0f172a,#111827)",
@@ -240,11 +227,11 @@ function App() {
         </div>
         <div style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(18px)", border: "1px solid rgba(0,234,255,.25)", boxShadow: "0 15px 35px rgba(0,0,0,.35), 0 0 20px rgba(0,234,255,.15)", transition: "0.3s", padding: "20px", width: "220px", height: "130px", borderRadius: "10px", textAlign: "center", display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <h3 style={{ margin: "0", fontSize: "14px", opacity: 0.8 }}>Self Training</h3>
-          <h1 style={{ fontSize: "42px", color: "#00eaff", margin: "5px 0 0" }}>{members.filter((m) => isSelfTraining(m.plan)).length}</h1>
+          <h1 style={{ fontSize: "42px", color: "#00eaff", margin: "5px 0 0" }}>{members.filter((m) => m.plan === "Self Training").length}</h1>
         </div>
         <div style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(18px)", border: "1px solid rgba(0,234,255,.25)", boxShadow: "0 15px 35px rgba(0,0,0,.35), 0 0 20px rgba(0,234,255,.15)", transition: "0.3s", padding: "20px", width: "220px", height: "130px", borderRadius: "10px", textAlign: "center", display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <h3 style={{ margin: "0", fontSize: "14px", opacity: 0.8 }}>Training</h3>
-          <h1 style={{ fontSize: "42px", color: "#00eaff", margin: "5px 0 0" }}>{members.filter((m) => isTraining(m.plan)).length}</h1>
+          <h1 style={{ fontSize: "42px", color: "#00eaff", margin: "5px 0 0" }}>{members.filter((m) => m.plan === "Training").length}</h1>
         </div>
         <div style={{
           background: dueTodayCount > 0 ? "rgba(255,0,0,0.15)" : "rgba(255,255,255,0.05)",
@@ -275,7 +262,7 @@ function App() {
           onChange={(e) => setPhone(e.target.value)}
           style={{ padding: "10px", marginRight: "10px", width: "170px", marginBottom: "10px", background: "rgba(255,255,255,.05)", backdropFilter: "blur(10px)", border: "2px solid rgba(0,234,255,.3)", borderRadius: "8px", color: "white" }} />
         
-        {/* Updated Plan Select */}
+        {/* Updated Plan Select - 5 Plans */}
         <select value={plan} onChange={(e) => setPlan(e.target.value)}
           style={{ padding: "10px", marginRight: "10px", marginBottom: "10px", background: "rgba(255,255,255,.05)", backdropFilter: "blur(10px)", border: "2px solid rgba(0,234,255,.3)", borderRadius: "8px", color: "white" }}>
           <option style={{ background: "#111827" }}>Self Training</option>
@@ -497,14 +484,16 @@ function App() {
         })
       )}
 
-      {/* Self Training Section - Updated */}
+      {/* ============ 5 PLAN SECTIONS ============ */}
+
+      {/* 💪 Self Training Members - ONLY Self Training */}
       <hr style={{ margin: "40px 0", borderColor: "rgba(0,234,255,.2)" }} />
       <h2 style={{ textAlign: "center", fontFamily: "Orbitron, sans-serif" }}>💪 Self Training Members</h2>
-      {members.filter((m) => isSelfTraining(m.plan)).length === 0 ? (
+      {members.filter((m) => m.plan === "Self Training").length === 0 ? (
         <p style={{ textAlign: "center", color: "#9ca3af" }}>Koi Self Training member nahi 😕</p>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "15px", justifyContent: "center" }}>
-          {members.filter((m) => isSelfTraining(m.plan)).map((member) => (
+          {members.filter((m) => m.plan === "Self Training").map((member) => (
             <div key={"self" + member.id}
               style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(18px)", border: "1px solid rgba(0,234,255,.25)", boxShadow: "0 15px 35px rgba(0,0,0,.35)", padding: "20px", borderRadius: "12px", textAlign: "center", minWidth: "200px" }}>
               <h3 style={{ color: "#00eaff" }}>{member.memberId}</h3>
@@ -516,14 +505,14 @@ function App() {
         </div>
       )}
 
-      {/* Training Section - Updated */}
+      {/* 🏆 Training Members - ONLY Training */}
       <hr style={{ margin: "40px 0", borderColor: "rgba(0,234,255,.2)" }} />
       <h2 style={{ textAlign: "center", fontFamily: "Orbitron, sans-serif" }}>🏆 Training Members</h2>
-      {members.filter((m) => isTraining(m.plan)).length === 0 ? (
+      {members.filter((m) => m.plan === "Training").length === 0 ? (
         <p style={{ textAlign: "center", color: "#9ca3af" }}>Koi Training member nahi 😕</p>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "15px", justifyContent: "center" }}>
-          {members.filter((m) => isTraining(m.plan)).map((member) => (
+          {members.filter((m) => m.plan === "Training").map((member) => (
             <div key={"training" + member.id}
               style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(18px)", border: "1px solid rgba(0,234,255,.25)", boxShadow: "0 15px 35px rgba(0,0,0,.35)", padding: "20px", borderRadius: "12px", textAlign: "center", minWidth: "200px" }}>
               <h3 style={{ color: "#00eaff" }}>{member.memberId}</h3>
@@ -535,14 +524,14 @@ function App() {
         </div>
       )}
 
-      {/* Cardio Only Section - New */}
+      {/* 🏃 Cardio Only Members */}
       <hr style={{ margin: "40px 0", borderColor: "rgba(0,234,255,.2)" }} />
-      <h2 style={{ textAlign: "center", fontFamily: "Orbitron, sans-serif" }}>🏃 Cardio Only Members</h2>
-      {members.filter((m) => isCardioOnly(m.plan)).length === 0 ? (
-        <p style={{ textAlign: "center", color: "#9ca3af" }}>Koi Cardio Only member nahi 😕</p>
+      <h2 style={{ textAlign: "center", fontFamily: "Orbitron, sans-serif" }}>🏃 Cardio Members</h2>
+      {members.filter((m) => m.plan === "Cardio").length === 0 ? (
+        <p style={{ textAlign: "center", color: "#9ca3af" }}>Koi Cardio member nahi 😕</p>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "15px", justifyContent: "center" }}>
-          {members.filter((m) => isCardioOnly(m.plan)).map((member) => (
+          {members.filter((m) => m.plan === "Cardio").map((member) => (
             <div key={"cardio" + member.id}
               style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(18px)", border: "1px solid rgba(0,234,255,.25)", boxShadow: "0 15px 35px rgba(0,0,0,.35)", padding: "20px", borderRadius: "12px", textAlign: "center", minWidth: "200px" }}>
               <h3 style={{ color: "#00eaff" }}>{member.memberId}</h3>
@@ -551,6 +540,88 @@ function App() {
               <p style={{ fontSize: "12px", color: "#9ca3af" }}>{member.plan}</p>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 💪🏃 Self + Cardio Members - NEW SECTION */}
+      <hr style={{ margin: "40px 0", borderColor: "rgba(0,234,255,.2)" }} />
+      <h2 style={{ textAlign: "center", fontFamily: "Orbitron, sans-serif", marginTop: "40px" }}>
+        💪🏃 Self + Cardio Members
+      </h2>
+      {members.filter((m) => m.plan === "Self + Cardio").length === 0 ? (
+        <p style={{ textAlign: "center", color: "#9ca3af" }}>
+          Koi Self + Cardio member nahi 😳
+        </p>
+      ) : (
+        <div style={{
+          display: "flex",
+          gap: "15px",
+          flexWrap: "wrap",
+          justifyContent: "center"
+        }}>
+          {members
+            .filter((m) => m.plan === "Self + Cardio")
+            .map((member) => (
+              <div
+                key={member.id}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  backdropFilter: "blur(18px)",
+                  padding: "20px",
+                  borderRadius: "12px",
+                  width: "220px",
+                  textAlign: "center",
+                  border: "1px solid #00ff66",
+                  boxShadow: "0 0 15px rgba(0,255,102,.15)"
+                }}
+              >
+                <h3 style={{ color: "#00eaff" }}>{member.memberId}</h3>
+                <p><strong>{member.name}</strong></p>
+                <p>{member.phone}</p>
+                <p style={{ fontSize: "12px", color: "#00ff66" }}>{member.plan}</p>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* 🏆🏃 Training + Cardio Members - NEW SECTION */}
+      <hr style={{ margin: "40px 0", borderColor: "rgba(0,234,255,.2)" }} />
+      <h2 style={{ textAlign: "center", fontFamily: "Orbitron, sans-serif", marginTop: "40px" }}>
+        🏆🏃 Training + Cardio Members
+      </h2>
+      {members.filter((m) => m.plan === "Training + Cardio").length === 0 ? (
+        <p style={{ textAlign: "center", color: "#9ca3af" }}>
+          Koi Training + Cardio member nahi 😳
+        </p>
+      ) : (
+        <div style={{
+          display: "flex",
+          gap: "15px",
+          flexWrap: "wrap",
+          justifyContent: "center"
+        }}>
+          {members
+            .filter((m) => m.plan === "Training + Cardio")
+            .map((member) => (
+              <div
+                key={member.id}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  backdropFilter: "blur(18px)",
+                  padding: "20px",
+                  borderRadius: "12px",
+                  width: "220px",
+                  textAlign: "center",
+                  border: "1px solid #0099ff",
+                  boxShadow: "0 0 15px rgba(0,153,255,.15)"
+                }}
+              >
+                <h3 style={{ color: "#00eaff" }}>{member.memberId}</h3>
+                <p><strong>{member.name}</strong></p>
+                <p>{member.phone}</p>
+                <p style={{ fontSize: "12px", color: "#0099ff" }}>{member.plan}</p>
+              </div>
+            ))}
         </div>
       )}
 
@@ -668,9 +739,11 @@ function App() {
           <p style={{ textAlign: "center", color: "#94a3b8" }}>────────────────────────────</p>
 
           <p>👥 Total Members : <strong>{members.length}</strong></p>
-          <p>💪 Self Training : <strong>{members.filter((m) => isSelfTraining(m.plan)).length}</strong></p>
-          <p>🏆 Training : <strong>{members.filter((m) => isTraining(m.plan)).length}</strong></p>
-          <p>🏃 Cardio Only : <strong>{members.filter((m) => isCardioOnly(m.plan)).length}</strong></p>
+          <p>💪 Self Training : <strong>{members.filter((m) => m.plan === "Self Training").length}</strong></p>
+          <p>🏆 Training : <strong>{members.filter((m) => m.plan === "Training").length}</strong></p>
+          <p>🏃 Cardio : <strong>{members.filter((m) => m.plan === "Cardio").length}</strong></p>
+          <p>💪🏃 Self + Cardio : <strong>{members.filter((m) => m.plan === "Self + Cardio").length}</strong></p>
+          <p>🏆🏃 Training + Cardio : <strong>{members.filter((m) => m.plan === "Training + Cardio").length}</strong></p>
 
           <p style={{ color: "#94a3b8" }}>────────────────────────────</p>
 
