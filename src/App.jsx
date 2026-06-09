@@ -17,9 +17,7 @@ function App() {
   const [feeStatus, setFeeStatus] = useState("Unpaid");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [monthlyFee, setMonthlyFee] = useState("");
-  const [totalFee, setTotalFee] = useState("");
   const [paidFee, setPaidFee] = useState("");
-  const [discount, setDiscount] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [members, setMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,10 +56,6 @@ function App() {
   ).length;
 
   const totalIncome = members.reduce((sum, m) => sum + Number(m.paidFee || 0), 0);
-  const totalPending = members.reduce(
-    (sum, m) => sum + (Number(m.totalFee || 0) - Number(m.paidFee || 0) - Number(m.discount || 0)),
-    0
-  );
   const totalExpense = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const netProfit = totalIncome - totalExpense;
 
@@ -87,8 +81,7 @@ function App() {
     if (editingId) {
       await updateDoc(doc(db, "members", editingId), {
         name, phone, plan, feeStatus, paymentMethod,
-        monthlyFee, totalFee, paidFee, discount, dueDate,
-        remainingFee: Number(totalFee || 0) - Number(paidFee || 0) - Number(discount || 0),
+        monthlyFee, paidFee, dueDate,
       });
       alert("Member Updated");
       setEditingId(null);
@@ -96,8 +89,7 @@ function App() {
       const memberId = `IBF-${String(members.length + 1).padStart(4, "0")}`;
       await addDoc(membersRef, {
         memberId, name, phone, plan, feeStatus, paymentMethod,
-        monthlyFee, totalFee, paidFee, discount, dueDate,
-        remainingFee: Number(totalFee || 0) - Number(paidFee || 0) - Number(discount || 0),
+        monthlyFee, paidFee, dueDate,
         joinDate: new Date().toLocaleDateString(),
         status: "active",
       });
@@ -106,8 +98,8 @@ function App() {
 
     setName(""); setPhone(""); setPlan("Self Training"); setFeeStatus("Unpaid");
     setPaymentMethod("Cash");
-    setMonthlyFee(""); setTotalFee(""); setPaidFee("");
-    setDiscount(""); setDueDate("");
+    setMonthlyFee(""); setPaidFee("");
+    setDueDate("");
     fetchMembers();
   };
 
@@ -264,7 +256,7 @@ function App() {
         </div>
       </div>
 
-      {/* Form */}
+      {/* Form - Clean version with only essential fields */}
       <div style={{ textAlign: "center" }}>
         <input type="text" placeholder="Member Name" value={name} onChange={(e) => setName(e.target.value)} style={{ padding: "10px", marginRight: "10px", width: "170px", marginBottom: "10px", background: "#1a1a1a", border: "1px solid #00eaff", borderRadius: "8px", color: "white" }} />
         <input type="text" placeholder="Phone Number" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ padding: "10px", marginRight: "10px", width: "170px", marginBottom: "10px", background: "#1a1a1a", border: "1px solid #00eaff", borderRadius: "8px", color: "white" }} />
@@ -290,16 +282,14 @@ function App() {
         </select>
 
         <input type="number" placeholder="Monthly Fee (PKR)" value={monthlyFee} onChange={(e) => setMonthlyFee(e.target.value)} style={{ padding: "10px", marginRight: "10px", width: "150px", marginBottom: "10px", background: "#1a1a1a", border: "1px solid #00eaff", borderRadius: "8px", color: "white" }} />
-        <input type="number" placeholder="Total Fee (PKR)" value={totalFee} onChange={(e) => setTotalFee(e.target.value)} style={{ padding: "10px", marginRight: "10px", width: "150px", marginBottom: "10px", background: "#1a1a1a", border: "1px solid #00eaff", borderRadius: "8px", color: "white" }} />
         <input type="number" placeholder="Paid Fee (PKR)" value={paidFee} onChange={(e) => setPaidFee(e.target.value)} style={{ padding: "10px", marginRight: "10px", width: "150px", marginBottom: "10px", background: "#1a1a1a", border: "1px solid #00eaff", borderRadius: "8px", color: "white" }} />
-        <input type="number" placeholder="Discount (PKR)" value={discount} onChange={(e) => setDiscount(e.target.value)} style={{ padding: "10px", marginRight: "10px", width: "150px", marginBottom: "10px", background: "#1a1a1a", border: "1px solid #00eaff", borderRadius: "8px", color: "white" }} />
         <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ padding: "10px", marginRight: "10px", width: "160px", marginBottom: "10px", background: "#1a1a1a", border: "1px solid #00eaff", borderRadius: "8px", color: "white" }} />
         <br />
         <button onClick={addMember} style={{ padding: "10px 20px", background: editingId ? "#ffb300" : "#00eaff", color: editingId ? "white" : "black", border: "none", cursor: "pointer", borderRadius: "8px", marginTop: "10px", fontWeight: "bold" }}>
           {editingId ? "Update Member" : "Add Member"}
         </button>
         {editingId && (
-          <button onClick={() => { setEditingId(null); setName(""); setPhone(""); setPlan("Self Training"); setFeeStatus("Unpaid"); setPaymentMethod("Cash"); setMonthlyFee(""); setTotalFee(""); setPaidFee(""); setDiscount(""); setDueDate(""); }} style={{ padding: "10px 20px", background: "#6b7280", color: "white", border: "none", cursor: "pointer", borderRadius: "8px", marginLeft: "10px", marginTop: "10px" }}>
+          <button onClick={() => { setEditingId(null); setName(""); setPhone(""); setPlan("Self Training"); setFeeStatus("Unpaid"); setPaymentMethod("Cash"); setMonthlyFee(""); setPaidFee(""); setDueDate(""); }} style={{ padding: "10px 20px", background: "#6b7280", color: "white", border: "none", cursor: "pointer", borderRadius: "8px", marginLeft: "10px", marginTop: "10px" }}>
             Cancel
           </button>
         )}
@@ -318,7 +308,6 @@ function App() {
         <p style={{ textAlign: "center", color: "#9ca3af" }}>Koi member nahi mila 😕</p>
       ) : (
         filteredMembers.map((member) => {
-          const remaining = Number(member.totalFee || 0) - Number(member.paidFee || 0) - Number(member.discount || 0);
           const isDue = member.feeStatus === "Unpaid" && member.dueDate && new Date(member.dueDate) <= new Date();
 
           return (
@@ -334,13 +323,13 @@ function App() {
               <hr />
               <p>💳 Fee Status : <strong style={{ color: member.feeStatus === "Paid" ? "#00ff99" : "#ff4444" }}>{member.feeStatus}</strong></p>
               <p>💳 Payment Method : <strong style={{ color: getPaymentColor(member.paymentMethod) }}>{member.paymentMethod || "Cash"}</strong></p>
-              <p>💰 Total Fee : {formatPKR(member.totalFee || 0)}</p>
+              <p>💵 Monthly Fee : {formatPKR(member.monthlyFee || 0)}</p>
               <p>✅ Paid Fee : {formatPKR(member.paidFee || 0)}</p>
-              <p>❌ Remaining : {formatPKR(remaining)}</p>
+              <p>📅 Due Date : {member.dueDate || "—"}</p>
               {isDue ? <h3 style={{ color: "#ff4444" }}>⚠️ Fee Due</h3> : <h3 style={{ color: "#00ff99" }}>✅ Fees Cleared</h3>}
 
               <div style={{ marginTop: "20px", display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
-                <button onClick={() => { setEditingId(member.id); setName(member.name); setPhone(member.phone); setPlan(member.plan); setFeeStatus(member.feeStatus); setPaymentMethod(member.paymentMethod || "Cash"); setMonthlyFee(member.monthlyFee || ""); setTotalFee(member.totalFee || ""); setPaidFee(member.paidFee || ""); setDiscount(member.discount || ""); setDueDate(member.dueDate || ""); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{ background: "#ffb300", color: "white", border: "none", padding: "10px 25px", borderRadius: "8px", cursor: "pointer" }}>✏️ Edit</button>
+                <button onClick={() => { setEditingId(member.id); setName(member.name); setPhone(member.phone); setPlan(member.plan); setFeeStatus(member.feeStatus); setPaymentMethod(member.paymentMethod || "Cash"); setMonthlyFee(member.monthlyFee || ""); setPaidFee(member.paidFee || ""); setDueDate(member.dueDate || ""); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{ background: "#ffb300", color: "white", border: "none", padding: "10px 25px", borderRadius: "8px", cursor: "pointer" }}>✏️ Edit</button>
                 <button onClick={() => markAttendance(member)} style={{ background: "#00ff99", color: "black", border: "none", padding: "10px 25px", borderRadius: "8px", cursor: "pointer" }}>✅ Present</button>
                 <button onClick={() => deleteMember(member.id)} style={{ background: "#ff004d", color: "white", border: "none", padding: "10px 25px", borderRadius: "8px", cursor: "pointer" }}>🗑️ Delete</button>
               </div>
@@ -349,7 +338,7 @@ function App() {
         })
       )}
 
-      {/* ============ 5 PLAN SECTIONS - YAHAN PAR BOXES HAIN ============ */}
+      {/* ============ 5 PLAN SECTIONS ============ */}
 
       {/* 💪 Self Training Members */}
       <hr style={{ margin: "40px 0" }} />
@@ -459,10 +448,6 @@ function App() {
         <div style={{ background: "rgba(255,68,68,0.1)", padding: "20px", borderRadius: "12px", width: "180px", textAlign: "center" }}>
           <h3>Expenses</h3>
           <h2 style={{ color: "#ff4444" }}>{formatPKR(totalExpense)}</h2>
-        </div>
-        <div style={{ background: "rgba(255,179,0,0.1)", padding: "20px", borderRadius: "12px", width: "180px", textAlign: "center" }}>
-          <h3>Pending</h3>
-          <h2 style={{ color: "#ffb300" }}>{formatPKR(totalPending)}</h2>
         </div>
         <div style={{ background: netProfit >= 0 ? "rgba(0,255,153,0.1)" : "rgba(255,68,68,0.1)", padding: "20px", borderRadius: "12px", width: "180px", textAlign: "center" }}>
           <h3>Profit</h3>
