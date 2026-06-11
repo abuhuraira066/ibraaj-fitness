@@ -1,25 +1,22 @@
-import { safeFormatPKR, getRemainingDays, getRemainingDaysText, getRemainingDaysColor } from "../utils/helpers";
+import { safeFormatPKR, getRemainingDaysText, getRemainingDaysType, getRemainingDaysNumber } from "../utils/helpers";
 
 function Dashboard({ members, dueTodayCount, totalIncome, totalExpense, netProfit, cashPayments, onlinePayments, cardPayments, jazzCashPayments, formatPKR }) {
   
   const safeMembers = members || [];
   
+  // Get due members based on remaining days
   const getDueMembers = () => {
     if (!safeMembers.length) return [];
     return safeMembers
       .filter(m => m.feeStatus === "Unpaid" && m.dueDate)
       .map(m => {
-        const reminder = getRemainingDays(m.dueDate);
-        return { ...m, reminderText: reminder?.text, reminderType: reminder?.type, diffDays: reminder?.days || 0 };
+        const days = getRemainingDaysNumber(m.dueDate);
+        const type = getRemainingDaysType(m.dueDate);
+        const text = getRemainingDaysText(m.dueDate);
+        return { ...m, reminderText: text, reminderType: type, diffDays: days || 0 };
       })
-      .filter(m => m.reminderText)
-      .sort((a, b) => {
-        if (a.reminderType === "overdue" && b.reminderType !== "overdue") return -1;
-        if (a.reminderType !== "overdue" && b.reminderType === "overdue") return 1;
-        if (a.reminderType === "today" && b.reminderType !== "today") return -1;
-        if (a.reminderType !== "today" && b.reminderType === "today") return 1;
-        return a.diffDays - b.diffDays;
-      });
+      .filter(m => m.reminderText !== "Not Set")
+      .sort((a, b) => a.diffDays - b.diffDays);
   };
 
   const dueMembers = getDueMembers();
@@ -116,7 +113,11 @@ function Dashboard({ members, dueTodayCount, totalIncome, totalExpense, netProfi
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: "12px", color: "#9ca3af" }}>📅 Due: {member.dueDate}</div>
-                  <span style={{ color: getReminderColor(member.reminderType), fontWeight: "bold", fontSize: "13px" }}>{getReminderIcon(member.reminderType)} {member.reminderText}</span>
+                  <span style={{ color: getReminderColor(member.reminderType), fontWeight: "bold", fontSize: "13px" }}>
+                    {member.reminderType === "overdue" ? `🚨 ${member.reminderText}` :
+                     member.reminderType === "today" ? `⚠️ ${member.reminderText}` :
+                     `⏰ ${member.reminderText}`}
+                  </span>
                 </div>
               </div>
             ))}

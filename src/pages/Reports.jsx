@@ -1,3 +1,4 @@
+import { useState } from "react";
 import html2pdf from "html2pdf.js";
 
 export default function Reports({
@@ -13,9 +14,12 @@ export default function Reports({
   formatPKR,
 }) {
   
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
   // Safe formatPKR function
   const safeFormatPKR = (amount) => {
-    if (!amount && amount !== 0) return "Rs 0";
+    if (amount === undefined || amount === null) return "Rs 0";
     if (formatPKR && typeof formatPKR === 'function') {
       return formatPKR(amount);
     }
@@ -30,6 +34,24 @@ export default function Reports({
   // Safe members array
   const safeMembers = Array.isArray(members) ? members : [];
 
+  // Plan configurations
+  const plans = [
+    { key: "Self Training", icon: "💪", name: "Self Training", color: "#FFD700" },
+    { key: "Training", icon: "🏆", name: "Training", color: "#FFC107" },
+    { key: "Cardio", icon: "🏃", name: "Cardio", color: "#FFB300" },
+    { key: "Self + Cardio", icon: "💪🏃", name: "Self + Cardio", color: "#00ff88" },
+    { key: "Training + Cardio", icon: "🏆🏃", name: "Training + Cardio", color: "#0099ff" },
+  ];
+
+  const handlePlanClick = (planName) => {
+    setSelectedPlan(planName);
+    setShowModal(true);
+  };
+
+  const getPlanMembers = (planName) => {
+    return safeMembers.filter(m => m?.plan === planName);
+  };
+
   const downloadPDF = () => {
     const element = document.getElementById("report-content");
     if (!element) return;
@@ -41,6 +63,18 @@ export default function Reports({
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
     };
     html2pdf().set(opt).from(element).save();
+  };
+
+  // Get plan color
+  const getPlanColor = (planKey) => {
+    const plan = plans.find(p => p.key === planKey);
+    return plan ? plan.color : "#FFD700";
+  };
+
+  // Get plan icon
+  const getPlanIcon = (planKey) => {
+    const plan = plans.find(p => p.key === planKey);
+    return plan ? plan.icon : "🏋️";
   };
 
   return (
@@ -113,37 +147,58 @@ export default function Reports({
           </div>
         </div>
 
-        {/* Plan Wise Report */}
-        <div style={{ background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: "15px", padding: "25px", marginBottom: "25px", overflowX: "auto" }}>
+        {/* Plan Wise Report - Clickable Cards */}
+        <div style={{ background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: "15px", padding: "25px", marginBottom: "25px" }}>
           <h2 style={{ color: "#FFD700", textAlign: "center", marginBottom: "20px", fontFamily: "Orbitron, sans-serif", fontSize: "clamp(18px, 4vw, 24px)" }}>
             🏋️ Plan Wise Members Breakdown
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "rgba(255,215,0,0.05)", borderRadius: "10px", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "16px", color: "#cbd5e1" }}>💪 Self Training</span>
-              <span style={{ fontSize: "22px", fontWeight: "bold", color: "#FFD700" }}>{safeMembers.filter(m => m?.plan === "Self Training").length}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "rgba(255,215,0,0.05)", borderRadius: "10px", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "16px", color: "#cbd5e1" }}>🏆 Training</span>
-              <span style={{ fontSize: "22px", fontWeight: "bold", color: "#FFD700" }}>{safeMembers.filter(m => m?.plan === "Training").length}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "rgba(255,215,0,0.05)", borderRadius: "10px", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "16px", color: "#cbd5e1" }}>🏃 Cardio</span>
-              <span style={{ fontSize: "22px", fontWeight: "bold", color: "#FFD700" }}>{safeMembers.filter(m => m?.plan === "Cardio").length}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "rgba(255,215,0,0.05)", borderRadius: "10px", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "16px", color: "#cbd5e1" }}>💪🏃 Self + Cardio</span>
-              <span style={{ fontSize: "22px", fontWeight: "bold", color: "#FFD700" }}>{safeMembers.filter(m => m?.plan === "Self + Cardio").length}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "rgba(255,215,0,0.05)", borderRadius: "10px", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "16px", color: "#cbd5e1" }}>🏆🏃 Training + Cardio</span>
-              <span style={{ fontSize: "22px", fontWeight: "bold", color: "#FFD700" }}>{safeMembers.filter(m => m?.plan === "Training + Cardio").length}</span>
-            </div>
+            {plans.map((plan) => {
+              const planMembers = getPlanMembers(plan.key);
+              return (
+                <div 
+                  key={plan.key}
+                  onClick={() => handlePlanClick(plan.key)}
+                  style={{ 
+                    display: "flex", 
+                    justifyContent: "space-between", 
+                    alignItems: "center", 
+                    padding: "15px 20px", 
+                    background: "rgba(255,215,0,0.05)", 
+                    borderRadius: "10px", 
+                    flexWrap: "wrap",
+                    cursor: "pointer",
+                    transition: "0.3s",
+                    border: "1px solid transparent",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(255,215,0,0.15)";
+                    e.currentTarget.style.borderColor = plan.color;
+                    e.currentTarget.style.transform = "translateX(5px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(255,215,0,0.05)";
+                    e.currentTarget.style.borderColor = "transparent";
+                    e.currentTarget.style.transform = "translateX(0px)";
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "24px" }}>{plan.icon}</span>
+                    <span style={{ fontSize: "16px", color: "#cbd5e1", fontWeight: "bold" }}>{plan.name}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+                    <span style={{ fontSize: "22px", fontWeight: "bold", color: plan.color }}>{planMembers.length}</span>
+                    <span style={{ fontSize: "12px", color: "#9ca3af" }}>members</span>
+                    <span style={{ fontSize: "14px", color: "#FFD700" }}>👉</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Payment Breakdown Report */}
-        <div style={{ background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: "15px", padding: "25px", marginBottom: "25px", overflowX: "auto" }}>
+        <div style={{ background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: "15px", padding: "25px", marginBottom: "25px" }}>
           <h2 style={{ color: "#FFD700", textAlign: "center", marginBottom: "20px", fontFamily: "Orbitron, sans-serif", fontSize: "clamp(18px, 4vw, 24px)" }}>
             💳 Payment Method Breakdown
           </h2>
@@ -172,6 +227,103 @@ export default function Reports({
           </div>
         </div>
       </div>
+
+      {/* Modal for Plan Members */}
+      {showModal && selectedPlan && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.8)",
+            backdropFilter: "blur(5px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            style={{
+              background: "linear-gradient(135deg, #0a0a0a, #0f0f0f)",
+              border: "2px solid #FFD700",
+              borderRadius: "20px",
+              padding: "30px",
+              maxWidth: "500px",
+              width: "90%",
+              maxHeight: "80vh",
+              overflowY: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ color: "#FFD700", margin: 0 }}>
+                {getPlanIcon(selectedPlan)} {selectedPlan} Members
+              </h2>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  background: "rgba(255,68,68,0.2)",
+                  border: "1px solid #ff4444",
+                  color: "#ff4444",
+                  fontSize: "20px",
+                  width: "35px",
+                  height: "35px",
+                  borderRadius: "50%",
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div style={{ textAlign: "center", marginBottom: "20px", padding: "10px", background: "rgba(255,215,0,0.1)", borderRadius: "10px" }}>
+              <p style={{ color: "#FFD700", fontSize: "18px", fontWeight: "bold" }}>
+                Total Members: {getPlanMembers(selectedPlan).length}
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {getPlanMembers(selectedPlan).length === 0 ? (
+                <p style={{ textAlign: "center", color: "#9ca3af", padding: "30px" }}>No members found in this plan 😕</p>
+              ) : (
+                getPlanMembers(selectedPlan).map((member, index) => (
+                  <div
+                    key={member.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "12px 15px",
+                      background: "rgba(255,215,0,0.05)",
+                      borderRadius: "8px",
+                      borderLeft: `3px solid ${getPlanColor(selectedPlan)}`,
+                      transition: "0.3s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "rgba(255,215,0,0.1)";
+                      e.currentTarget.style.transform = "translateX(3px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(255,215,0,0.05)";
+                      e.currentTarget.style.transform = "translateX(0px)";
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontSize: "16px", fontWeight: "bold", color: "#FFD700" }}>✓</span>
+                      <span style={{ marginLeft: "10px", color: "white" }}>{member.name}</span>
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#9ca3af" }}>📞 {member.phone}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div style={{ display: "flex", justifyContent: "center", gap: "15px", marginTop: "30px", flexWrap: "wrap" }}>

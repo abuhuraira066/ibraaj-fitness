@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
 
-export default function MemberProfile() {  // ✅ "export default" hona chahiye
+export default function MemberProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [member, setMember] = useState(null);
@@ -12,23 +12,48 @@ export default function MemberProfile() {  // ✅ "export default" hona chahiye
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchMemberData();
+    if (id) {
+      fetchMemberData();
+    } else {
+      console.error("No member ID provided");
+      setLoading(false);
+    }
   }, [id]);
 
   const fetchMemberData = async () => {
     try {
+      console.log("Fetching member with ID:", id);
+      
+      // Fetch member details
       const memberDoc = await getDoc(doc(db, "members", id));
+      console.log("Member doc exists:", memberDoc.exists());
+      
       if (memberDoc.exists()) {
         setMember({ id: memberDoc.id, ...memberDoc.data() });
+      } else {
+        console.error("Member not found in database");
+        setLoading(false);
+        return;
       }
 
-      const paymentsQuery = query(collection(db, "payments"), where("memberId", "==", id));
-      const paymentsData = await getDocs(paymentsQuery);
-      setPayments(paymentsData.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => new Date(b.date) - new Date(a.date)));
+      // Fetch payment history
+      try {
+        const paymentsQuery = query(collection(db, "payments"), where("memberId", "==", id));
+        const paymentsData = await getDocs(paymentsQuery);
+        setPayments(paymentsData.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => new Date(b.date) - new Date(a.date)));
+      } catch (err) {
+        console.error("Error fetching payments:", err);
+      }
 
-      const attendanceQuery = query(collection(db, "attendance"), where("memberId", "==", id));
-      const attendanceData = await getDocs(attendanceQuery);
-      setAttendance(attendanceData.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => new Date(b.date) - new Date(a.date)));
+      // Fetch attendance history
+      try {
+        const attendanceQuery = query(collection(db, "attendanceHistory"), where("memberId", "==", id));
+        const attendanceData = await getDocs(attendanceQuery);
+        setAttendance(attendanceData.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => new Date(b.date) - new Date(a.date)));
+      } catch (err) {
+        console.error("Error fetching attendance:", err);
+      }
+      
     } catch (error) {
       console.error("Error fetching member data:", error);
     } finally {
@@ -45,8 +70,66 @@ export default function MemberProfile() {  // ✅ "export default" hona chahiye
     }).format(amount || 0);
   };
 
-  if (loading) return <div style={{ color: "#FFD700", textAlign: "center", padding: "50px" }}>Loading...</div>;
-  if (!member) return <div style={{ color: "#ff4444", textAlign: "center", padding: "50px" }}>Member not found</div>;
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "N/A";
+    const [year, month, day] = dateStr.split("-");
+    return `${day}/${month}/${year}`;
+  };
+
+  // Calculate Remaining Days for Due Date
+  const getRemainingDays = (dueDate) => {
+    if (!dueDate) return { text: "Not Set", color: "#9ca3af", type: "not-set" };
+    
+    const today = new Date();
+    const due = new Date(dueDate);
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+    
+    const diffTime = due - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 0) {
+      return { text: `${diffDays} Days Left`, color: "#00ff88", type: "upcoming" };
+    } else if (diffDays === 0) {
+      return { text: "Due Today", color: "#ffcc00", type: "today" };
+    } else {
+      return { text: `${Math.abs(diffDays)} Days Overdue`, color: "#ff4444", type: "overdue" };
+    }
+  };
+
+  const getPaymentStatusMessage = () => {
+    if (!member) return { text: "", color: "#9ca3af", icon: "" };
+    
+    const monthly = Number(member.monthlyFee) || 0;
+    const paid = Number(member.paidFee) || 0;
+    
+    if (member.feeStatus === "Paid") {
+      return {
+        text: "✅ Payment Completed! Next due in 30 days",
+        color: "#00ff88",
+        icon: "✅"
+      };
+    } else if (paid > 0 && paid < monthly) {
+      const remaining = monthly - paid;
+      return {
+        text: `⚠️ Partial Payment: PKR ${remaining.toLocaleString()} remaining`,
+        color: "#ffcc00",
+        icon: "⚠️"
+      };
+    } else {
+      return {
+        text: "❌ No payment received yet",
+        color: "#ff4444",
+        icon: "❌"
+      };
+    }
+  };
+
+  const remainingDays = getRemainingDays(member?.dueDate);
+  const paymentStatus = getPaymentStatusMessage();
+
+  if (loading) return <div style={{ color: "#FFD700", textAlign: "center", padding: "50px" }}>Loading member details...</div>;
+  if (!member) return <div style={{ color: "#ff4444", textAlign: "center", padding: "50px" }}>Member not found! Please go back and try again.</div>;
 
   return (
     <div>
@@ -79,6 +162,7 @@ export default function MemberProfile() {  // ✅ "export default" hona chahiye
         <p style={{ color: "#00ff88", marginTop: "10px" }}>📅 Joined: {member.joinDate}</p>
       </div>
 
+      {/* Stats Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px", marginBottom: "30px" }}>
         <div style={{ background: "rgba(255,215,0,0.05)", border: "1px solid #FFD700", borderRadius: "15px", padding: "20px", textAlign: "center" }}>
           <h3 style={{ color: "#FFD700" }}>💰 Monthly Fee</h3>
@@ -98,6 +182,56 @@ export default function MemberProfile() {  // ✅ "export default" hona chahiye
         </div>
       </div>
 
+      {/* Due Date & Remaining Days Section */}
+      <div style={{
+        background: "rgba(255,215,0,0.08)",
+        border: `2px solid ${remainingDays.color}`,
+        borderRadius: "15px",
+        padding: "20px",
+        marginBottom: "30px",
+        textAlign: "center",
+      }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "20px" }}>
+          <div>
+            <h3 style={{ color: "#FFD700", marginBottom: "10px" }}>📅 Due Date</h3>
+            <p style={{ fontSize: "18px", fontWeight: "bold", color: remainingDays.color }}>
+              {member.dueDate || "Not Set"}
+            </p>
+          </div>
+          <div>
+            <h3 style={{ color: "#FFD700", marginBottom: "10px" }}>⏳ Status</h3>
+            <p style={{ fontSize: "18px", fontWeight: "bold", color: remainingDays.color }}>
+              {remainingDays.text}
+            </p>
+          </div>
+          <div>
+            <h3 style={{ color: "#FFD700", marginBottom: "10px" }}>💳 Payment Status</h3>
+            <p style={{ fontSize: "14px", fontWeight: "bold", color: paymentStatus.color }}>
+              {paymentStatus.icon} {paymentStatus.text}
+            </p>
+          </div>
+        </div>
+        
+        {remainingDays.type === "overdue" && (
+          <div style={{ marginTop: "15px", padding: "10px", background: "rgba(255,68,68,0.1)", borderRadius: "10px" }}>
+            <p style={{ color: "#ff4444" }}>⚠️ Please collect payment immediately! Fee is overdue.</p>
+          </div>
+        )}
+        
+        {remainingDays.type === "today" && (
+          <div style={{ marginTop: "15px", padding: "10px", background: "rgba(255,204,0,0.1)", borderRadius: "10px" }}>
+            <p style={{ color: "#ffcc00" }}>⚠️ Fee is due today! Please collect payment.</p>
+          </div>
+        )}
+        
+        {remainingDays.type === "upcoming" && remainingDays.text !== "Not Set" && (
+          <div style={{ marginTop: "15px", padding: "10px", background: "rgba(0,255,136,0.05)", borderRadius: "10px" }}>
+            <p style={{ color: "#00ff88" }}>✅ Payment is due in {remainingDays.text.split(" ")[0]} days.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Payment History */}
       <div style={{
         background: "rgba(255,215,0,0.05)",
         border: "1px solid rgba(255,215,0,0.3)",
@@ -128,6 +262,7 @@ export default function MemberProfile() {  // ✅ "export default" hona chahiye
         )}
       </div>
 
+      {/* Attendance History */}
       <div style={{
         background: "rgba(255,215,0,0.05)",
         border: "1px solid rgba(255,215,0,0.3)",
@@ -149,7 +284,7 @@ export default function MemberProfile() {  // ✅ "export default" hona chahiye
                 borderLeft: "3px solid #FFD700",
               }}>
                 <span>✅ Present</span>
-                <span>📅 {record.date?.toDate ? record.date.toDate().toLocaleDateString() : record.date}</span>
+                <span>📅 {formatDate(record.date)}</span>
               </div>
             ))}
           </div>

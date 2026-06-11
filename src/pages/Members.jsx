@@ -1,4 +1,6 @@
 import { useNavigate } from "react-router-dom";
+import { db } from "../firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 export default function Members({
   members,
@@ -42,24 +44,61 @@ export default function Members({
     setDueDate(member.dueDate || ""); setEditingId(member.id); window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const getRemainingDays = (dueDate) => {
-    if (!dueDate) return "Not Set";
-    const today = new Date(), due = new Date(dueDate);
-    today.setHours(0,0,0,0); due.setHours(0,0,0,0);
-    const diff = Math.ceil((due - today) / (1000*60*60*24));
-    if (diff > 0) return `${diff} Days Left`;
-    if (diff === 0) return "Due Today";
-    return `${Math.abs(diff)} Days Overdue`;
+  const handleMarkAttendance = async (member) => {
+    const today = new Date().toISOString().split("T")[0];
+    
+    try {
+      await addDoc(collection(db, "attendanceHistory"), {
+        memberId: member.id,
+        memberCardId: member.memberId,
+        name: member.name,
+        phone: member.phone,
+        plan: member.plan,
+        date: today,
+        status: "Present",
+        timestamp: serverTimestamp(),
+      });
+      alert(`${member.name} marked Present for ${today}`);
+    } catch (error) {
+      console.error("Error marking attendance:", error);
+      alert("Error marking attendance!");
+    }
   };
 
-  const getRemainingDaysColor = (dueDate) => {
-    if (!dueDate) return "#9ca3af";
-    const today = new Date(), due = new Date(dueDate);
-    today.setHours(0,0,0,0); due.setHours(0,0,0,0);
-    const diff = Math.ceil((due - today) / (1000*60*60*24));
-    if (diff > 0) return "#00ff88";
-    if (diff === 0) return "#ffcc00";
-    return "#ff4444";
+  // ✅ Auto calculate remaining days based on paidDate or joinDate
+  const getRemainingDaysData = (member) => {
+    // Agar fee status Paid hai aur paid fee monthly fee ke barabar hai to paidDate se calculate karo
+    if (member.feeStatus === "Paid" && Number(member.paidFee) >= Number(member.monthlyFee)) {
+      // Paid date use karo
+      const baseDate = member.paidDate ? new Date(member.paidDate) : new Date(member.joinDate);
+      const dueDate = new Date(baseDate);
+      dueDate.setDate(dueDate.getDate() + 30);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
+      const remainingDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+      
+      if (remainingDays > 7) return { text: `${remainingDays} Days Left`, color: "#00ff88", type: "upcoming", days: remainingDays };
+      if (remainingDays > 0) return { text: `${remainingDays} Days Left`, color: "#ffcc00", type: "upcoming", days: remainingDays };
+      if (remainingDays === 0) return { text: "Due Today", color: "#ffcc00", type: "today", days: 0 };
+      return { text: `${Math.abs(remainingDays)} Days Overdue`, color: "#ff4444", type: "overdue", days: remainingDays };
+    }
+    
+    // Agar fee pending hai to dueDate field use karo (user entered)
+    if (member.dueDate) {
+      const today = new Date();
+      const due = new Date(member.dueDate);
+      today.setHours(0, 0, 0, 0);
+      due.setHours(0, 0, 0, 0);
+      const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays > 7) return { text: `${diffDays} Days Left`, color: "#00ff88", type: "upcoming", days: diffDays };
+      if (diffDays > 0) return { text: `${diffDays} Days Left`, color: "#ffcc00", type: "upcoming", days: diffDays };
+      if (diffDays === 0) return { text: "Due Today", color: "#ffcc00", type: "today", days: 0 };
+      return { text: `${Math.abs(diffDays)} Days Overdue`, color: "#ff4444", type: "overdue", days: diffDays };
+    }
+    
+    return { text: "Not Set", color: "#9ca3af", type: "not-set", days: null };
   };
 
   const safeMembers = Array.isArray(filteredMembers) ? filteredMembers : [];
@@ -93,9 +132,12 @@ export default function Members({
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: "20px" }}>
         {safeMembers.length === 0 ? <p style={{ textAlign: "center", color: "#9ca3af" }}>Koi member nahi mila 😕</p> : safeMembers.map((member) => {
-          const isDue = member.feeStatus === "Unpaid" && member.dueDate && new Date(member.dueDate) <= new Date();
+          const remainingData = getRemainingDaysData(member);
+          const isOverdue = remainingData.type === "overdue";
+          const isDueSoon = remainingData.type === "upcoming" && remainingData.days <= 7;
+          
           return (
-            <div key={member.id} onClick={() => navigate(`/member/${member.id}`)} style={{ cursor: "pointer", background: "linear-gradient(135deg, #0a0a0a, #0f0f0f)", border: isDue ? "2px solid #ff4444" : "1px solid #FFD700", borderRadius: "15px", padding: "20px" }}>
+            <div key={member.id} onClick={() => navigate(`/member/${member.id}`)} style={{ cursor: "pointer", background: "linear-gradient(135deg, #0a0a0a, #0f0f0f)", border: isOverdue ? "2px solid #ff4444" : isDueSoon ? "2px solid #ffcc00" : "1px solid #FFD700", borderRadius: "15px", padding: "20px" }}>
               <div style={{ display: "inline-block", background: "rgba(255,215,0,0.15)", color: "#FFD700", padding: "4px 12px", borderRadius: "20px", fontSize: "12px" }}>🆔 {member.memberId || "—"}</div>
               <h2 style={{ color: "#FFD700" }}>{member.name}</h2>
               <p>📞 {member.phone}</p>
@@ -106,12 +148,21 @@ export default function Members({
               <p>💳 Method: <strong style={{ color: getPaymentColor(member.paymentMethod) }}>{member.paymentMethod || "Cash"}</strong></p>
               <p>💵 Monthly: {safeFormatPKR(member.monthlyFee)}</p>
               <p>✅ Paid: {safeFormatPKR(member.paidFee)}</p>
-              <p>📅 Due: {member.dueDate || "Not Set"}</p>
-              <p style={{ color: getRemainingDaysColor(member.dueDate), fontWeight: "bold" }}>⏳ {getRemainingDays(member.dueDate)}</p>
-              {isDue && <p style={{ color: "#ff4444", fontWeight: "bold" }}>⚠️ Fee Due!</p>}
+              
+              {/* ✅ Auto Calculated Due Date Display */}
+              {remainingData.type !== "not-set" ? (
+                <>
+                  <p>⏳ <span style={{ color: remainingData.color, fontWeight: "bold" }}>{remainingData.text}</span></p>
+                </>
+              ) : (
+                <p>📅 Due: Not Set</p>
+              )}
+              
+              {isOverdue && <p style={{ color: "#ff4444", fontWeight: "bold", marginTop: "5px" }}>⚠️ Fee Expired! Please renew.</p>}
+              
               <div style={{ display: "flex", gap: "10px", marginTop: "20px", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => handleEdit(member)} style={{ background: "#FFB300", border: "none", padding: "10px 20px", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" }}>✏️ Edit</button>
-                <button onClick={() => markAttendance(member)} style={{ background: "#00ff99", border: "none", padding: "10px 20px", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" }}>✅ Present</button>
+                <button onClick={() => handleMarkAttendance(member)} style={{ background: "#00ff99", border: "none", padding: "10px 20px", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" }}>✅ Present</button>
                 <button onClick={() => deleteMember(member.id)} style={{ background: "#ff4444", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" }}>🗑️ Delete</button>
               </div>
             </div>

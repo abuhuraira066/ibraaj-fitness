@@ -74,7 +74,32 @@ function App() {
     fetchExpenses();
   }, []);
 
-  const dueTodayCount = members.filter(m => m.feeStatus === "Unpaid" && m.dueDate && new Date(m.dueDate) <= new Date()).length;
+  // Auto calculate remaining days for due count
+  const getRemainingDaysCount = (member) => {
+    if (member.feeStatus === "Paid" && Number(member.paidFee) >= Number(member.monthlyFee)) {
+      const baseDate = member.paidDate ? new Date(member.paidDate) : new Date(member.joinDate);
+      const dueDate = new Date(baseDate);
+      dueDate.setDate(dueDate.getDate() + 30);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
+      return Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+    }
+    if (member.dueDate) {
+      const today = new Date();
+      const due = new Date(member.dueDate);
+      today.setHours(0, 0, 0, 0);
+      due.setHours(0, 0, 0, 0);
+      return Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+    }
+    return null;
+  };
+
+  const dueTodayCount = members.filter(m => {
+    const days = getRemainingDaysCount(m);
+    return days !== null && days <= 0;
+  }).length;
+
   const totalIncome = members.reduce((sum, m) => sum + Number(m.paidFee || 0), 0);
   const totalExpense = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const netProfit = totalIncome - totalExpense;
@@ -90,26 +115,73 @@ function App() {
     (m.memberId || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // ✅ Updated addMember - only saves paidDate, no manual dueDate
   const addMember = async () => {
     if (!name || !phone) { alert("Name aur Phone likho"); return; }
+    
+    let finalFeeStatus = feeStatus;
+    let paidDateValue = null;
+    
+    // Agar Paid hai to paidDate save karo
+    if (feeStatus === "Paid" && paidFee && Number(paidFee) >= Number(monthlyFee)) {
+      finalFeeStatus = "Paid";
+      paidDateValue = new Date().toISOString().split("T")[0];
+    }
+    
     if (editingId) {
-      await updateDoc(doc(db, "members", editingId), { name, phone, plan, feeStatus, paymentMethod, monthlyFee, paidFee, dueDate });
+      await updateDoc(doc(db, "members", editingId), { 
+        name, phone, plan, 
+        feeStatus: finalFeeStatus, 
+        paymentMethod, 
+        monthlyFee, 
+        paidFee, 
+        paidDate: paidDateValue,
+        dueDate: "" // dueDate ab save nahi karenge
+      });
       alert("Member Updated");
       setEditingId(null);
     } else {
       const memberId = `IBF-${String(members.length + 1).padStart(4, "0")}`;
-      await addDoc(membersRef, { memberId, name, phone, plan, feeStatus, paymentMethod, monthlyFee, paidFee, dueDate, joinDate: new Date().toLocaleDateString(), status: "active" });
+      await addDoc(membersRef, { 
+        memberId, name, phone, plan, 
+        feeStatus: finalFeeStatus, 
+        paymentMethod, 
+        monthlyFee, 
+        paidFee, 
+        paidDate: paidDateValue,
+        joinDate: new Date().toLocaleDateString(), 
+        status: "active" 
+      });
       alert("Member Added — ID: " + memberId);
     }
-    setName(""); setPhone(""); setPlan("Self Training"); setFeeStatus("Unpaid"); setPaymentMethod("Cash"); setMonthlyFee(""); setPaidFee(""); setDueDate("");
+    setName(""); setPhone(""); setPlan("Self Training"); setFeeStatus("Unpaid"); 
+    setPaymentMethod("Cash"); setMonthlyFee(""); setPaidFee(""); setDueDate("");
     fetchMembers();
   };
 
   const deleteMember = async (id) => { await deleteDoc(doc(db, "members", id)); fetchMembers(); };
+  
+  // ✅ Updated markAttendance to save to attendanceHistory
   const markAttendance = async (member) => {
-    await addDoc(collection(db, "attendance"), { memberId: member.id, memberCardId: member.memberId, name: member.name, phone: member.phone, plan: member.plan, status: "Present", date: serverTimestamp() });
-    alert(member.name + " marked Present");
+    const today = new Date().toISOString().split("T")[0];
+    try {
+      await addDoc(collection(db, "attendanceHistory"), {
+        memberId: member.id,
+        memberCardId: member.memberId,
+        name: member.name,
+        phone: member.phone,
+        plan: member.plan,
+        date: today,
+        status: "Present",
+        timestamp: serverTimestamp(),
+      });
+      alert(`${member.name} marked Present for ${today}`);
+    } catch (error) {
+      console.error("Error marking attendance:", error);
+      alert("Error marking attendance!");
+    }
   };
+  
   const addExpense = async () => {
     if (!expenseName || !expenseAmount) { alert("Expense Name aur Amount likho"); return; }
     await addDoc(expensesRef, { title: expenseName, amount: Number(expenseAmount), date: new Date().toLocaleDateString() });
@@ -117,6 +189,7 @@ function App() {
     fetchExpenses();
     alert("Expense Added");
   };
+  
   const deleteExpense = async (id) => {
     if (window.confirm("Delete this expense?")) { await deleteDoc(doc(db, "expenses", id)); fetchExpenses(); alert("Expense deleted!"); }
   };
