@@ -1,5 +1,7 @@
 import { useState } from "react";
 import html2pdf from "html2pdf.js";
+import { db } from "../firebase";
+import { collection, getDocs, updateDoc, doc, writeBatch } from "firebase/firestore";
 
 export default function Reports({
   members,
@@ -16,6 +18,7 @@ export default function Reports({
   
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Safe formatPKR function
   const safeFormatPKR = (amount) => {
@@ -50,6 +53,91 @@ export default function Reports({
 
   const getPlanMembers = (planName) => {
     return safeMembers.filter(m => m?.plan === planName);
+  };
+
+  // ✅ Reset Single Plan
+  const resetPlan = async (planName) => {
+    if (window.confirm(`⚠️ Reset "${planName}" plan?\n\nAll members in this plan will be moved to "No Plan".\n\nThis action cannot be undone!\n\nAre you sure?`)) {
+      setResetting(true);
+      try {
+        const membersToReset = safeMembers.filter(m => m.plan === planName);
+        
+        if (membersToReset.length === 0) {
+          alert(`No members in "${planName}" plan to reset.`);
+          setResetting(false);
+          return;
+        }
+        
+        const batch = writeBatch(db);
+        
+        membersToReset.forEach(member => {
+          const memberRef = doc(db, "members", member.id);
+          batch.update(memberRef, { plan: "" });
+        });
+        
+        await batch.commit();
+        alert(`✅ ${membersToReset.length} members removed from "${planName}" plan.`);
+        window.location.reload();
+      } catch (error) {
+        console.error("Error resetting plan:", error);
+        alert("Error resetting plan!");
+      } finally {
+        setResetting(false);
+      }
+    }
+  };
+
+  // ✅ Reset All Expenses
+  const resetAllExpenses = async () => {
+    if (window.confirm(`⚠️ RESET ALL EXPENSES ⚠️\n\nThis will delete ALL expense records.\n\nThis action cannot be undone!\n\nAre you sure?`)) {
+      setResetting(true);
+      try {
+        const expensesRef = collection(db, "expenses");
+        const expensesSnapshot = await getDocs(expensesRef);
+        const batch = writeBatch(db);
+        
+        expensesSnapshot.docs.forEach(expenseDoc => {
+          batch.delete(expenseDoc.ref);
+        });
+        
+        await batch.commit();
+        alert("✅ All expenses have been deleted!");
+        window.location.reload();
+      } catch (error) {
+        console.error("Error resetting expenses:", error);
+        alert("Error resetting expenses!");
+      } finally {
+        setResetting(false);
+      }
+    }
+  };
+
+  // ✅ Reset All Members' Paid Fees
+  const resetAllPayments = async () => {
+    if (window.confirm(`⚠️ RESET ALL PAYMENTS ⚠️\n\nThis will set ALL members' paidFee to 0 and status to Unpaid.\n\nThis action cannot be undone!\n\nAre you sure?`)) {
+      setResetting(true);
+      try {
+        const batch = writeBatch(db);
+        
+        safeMembers.forEach(member => {
+          const memberRef = doc(db, "members", member.id);
+          batch.update(memberRef, { 
+            paidFee: "0",
+            feeStatus: "Unpaid",
+            paidDate: null
+          });
+        });
+        
+        await batch.commit();
+        alert(`✅ All ${safeMembers.length} members' payments have been reset!`);
+        window.location.reload();
+      } catch (error) {
+        console.error("Error resetting payments:", error);
+        alert("Error resetting payments!");
+      } finally {
+        setResetting(false);
+      }
+    }
   };
 
   const downloadPDF = () => {
@@ -92,26 +180,65 @@ export default function Reports({
         📊 Reports & Analytics
       </h1>
 
-      {/* PDF Export Button */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+      {/* Action Buttons Row */}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
         <button
           onClick={downloadPDF}
           style={{
             background: "linear-gradient(135deg, #FFD700, #B8860B)",
             color: "#0a0a0a",
             border: "none",
-            padding: "12px 24px",
-            borderRadius: "10px",
+            padding: "10px 20px",
+            borderRadius: "8px",
             fontWeight: "bold",
             cursor: "pointer",
-            transition: "0.3s",
-            fontSize: "14px",
+            fontSize: "13px",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
+            gap: "6px",
           }}
         >
-          📄 Download PDF Report
+          📄 PDF
+        </button>
+        
+        <button
+          onClick={resetAllExpenses}
+          disabled={resetting}
+          style={{
+            background: "linear-gradient(135deg, #ff4444, #cc0000)",
+            color: "white",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            fontSize: "13px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          🗑️ Reset Expenses
+        </button>
+        
+        <button
+          onClick={resetAllPayments}
+          disabled={resetting}
+          style={{
+            background: "linear-gradient(135deg, #ff8800, #cc6600)",
+            color: "white",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            fontSize: "13px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          💰 Reset Payments
         </button>
       </div>
 
@@ -147,7 +274,7 @@ export default function Reports({
           </div>
         </div>
 
-        {/* Plan Wise Report - Clickable Cards */}
+        {/* Plan Wise Report - Clickable Cards with Reset Buttons */}
         <div style={{ background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: "15px", padding: "25px", marginBottom: "25px" }}>
           <h2 style={{ color: "#FFD700", textAlign: "center", marginBottom: "20px", fontFamily: "Orbitron, sans-serif", fontSize: "clamp(18px, 4vw, 24px)" }}>
             🏋️ Plan Wise Members Breakdown
@@ -158,7 +285,6 @@ export default function Reports({
               return (
                 <div 
                   key={plan.key}
-                  onClick={() => handlePlanClick(plan.key)}
                   style={{ 
                     display: "flex", 
                     justifyContent: "space-between", 
@@ -167,29 +293,54 @@ export default function Reports({
                     background: "rgba(255,215,0,0.05)", 
                     borderRadius: "10px", 
                     flexWrap: "wrap",
-                    cursor: "pointer",
-                    transition: "0.3s",
-                    border: "1px solid transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(255,215,0,0.15)";
-                    e.currentTarget.style.borderColor = plan.color;
-                    e.currentTarget.style.transform = "translateX(5px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(255,215,0,0.05)";
-                    e.currentTarget.style.borderColor = "transparent";
-                    e.currentTarget.style.transform = "translateX(0px)";
+                    gap: "10px",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div 
+                    style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", flex: 1 }}
+                    onClick={() => handlePlanClick(plan.key)}
+                    onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.7"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+                  >
                     <span style={{ fontSize: "24px" }}>{plan.icon}</span>
                     <span style={{ fontSize: "16px", color: "#cbd5e1", fontWeight: "bold" }}>{plan.name}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
                     <span style={{ fontSize: "22px", fontWeight: "bold", color: plan.color }}>{planMembers.length}</span>
                     <span style={{ fontSize: "12px", color: "#9ca3af" }}>members</span>
-                    <span style={{ fontSize: "14px", color: "#FFD700" }}>👉</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        resetPlan(plan.key);
+                      }}
+                      disabled={resetting || planMembers.length === 0}
+                      style={{
+                        background: "rgba(255,68,68,0.15)",
+                        border: "1px solid #ff4444",
+                        color: "#ff4444",
+                        padding: "6px 12px",
+                        borderRadius: "6px",
+                        cursor: planMembers.length === 0 ? "not-allowed" : "pointer",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        transition: "0.3s",
+                        opacity: planMembers.length === 0 ? 0.5 : 1,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (planMembers.length > 0) {
+                          e.currentTarget.style.background = "#ff4444";
+                          e.currentTarget.style.color = "white";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (planMembers.length > 0) {
+                          e.currentTarget.style.background = "rgba(255,68,68,0.15)";
+                          e.currentTarget.style.color = "#ff4444";
+                        }
+                      }}
+                    >
+                      🔄 Reset
+                    </button>
                   </div>
                 </div>
               );
@@ -225,6 +376,79 @@ export default function Reports({
             <h3 style={{ color: "#FFD700", marginBottom: "10px", fontSize: "18px" }}>📅 Monthly Report - {monthYear || new Date().toLocaleString("en-US", { month: "long", year: "numeric" })}</h3>
             <p style={{ color: "#9ca3af", fontSize: "12px" }}>Report generated on {new Date().toLocaleDateString()}</p>
           </div>
+        </div>
+      </div>
+
+      {/* Month Closing Section */}
+      <div style={{ 
+        background: "linear-gradient(135deg, rgba(255,68,68,0.1), rgba(255,68,68,0.05))", 
+        border: "2px solid #ff4444", 
+        borderRadius: "15px", 
+        padding: "25px", 
+        marginTop: "30px",
+        textAlign: "center"
+      }}>
+        <h2 style={{ color: "#ff4444", marginBottom: "15px", fontFamily: "Orbitron, sans-serif" }}>
+          🔒 Month Closing
+        </h2>
+        <p style={{ color: "#9ca3af", fontSize: "12px", marginBottom: "20px" }}>
+          This will reset ALL plans to 0 and move ALL members to "No Plan"
+        </p>
+        <div style={{ display: "flex", justifyContent: "center", gap: "15px", flexWrap: "wrap" }}>
+          <button
+            onClick={() => {
+              if (window.confirm(`⚠️ COMPLETE MONTH CLOSING ⚠️\n\nThis will:\n✅ Reset ALL plans to 0\n✅ Move ALL members to "No Plan"\n✅ Reset ALL payments\n✅ Delete ALL expenses\n\nThis action CANNOT be undone!\n\nAre you absolutely sure?`)) {
+                setResetting(true);
+                // Reset all plans first
+                const resetAllPlansBatch = writeBatch(db);
+                safeMembers.forEach(member => {
+                  const memberRef = doc(db, "members", member.id);
+                  resetAllPlansBatch.update(memberRef, { plan: "", paidFee: "0", feeStatus: "Unpaid", paidDate: null });
+                });
+                resetAllPlansBatch.commit().then(async () => {
+                  // Then delete all expenses
+                  const expensesRef = collection(db, "expenses");
+                  const expensesSnapshot = await getDocs(expensesRef);
+                  const expensesBatch = writeBatch(db);
+                  expensesSnapshot.docs.forEach(expenseDoc => {
+                    expensesBatch.delete(expenseDoc.ref);
+                  });
+                  await expensesBatch.commit();
+                  alert("✅ Month closing complete!\n\n✅ All plans reset to 0\n✅ All payments reset\n✅ All expenses deleted");
+                  window.location.reload();
+                }).catch(err => {
+                  console.error("Error during month closing:", err);
+                  alert("Error during month closing!");
+                  setResetting(false);
+                });
+              }
+            }}
+            disabled={resetting}
+            style={{
+              background: "linear-gradient(135deg, #ff4444, #cc0000)",
+              color: "white",
+              border: "none",
+              padding: "14px 30px",
+              borderRadius: "10px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              transition: "0.3s",
+              fontSize: "16px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 5px 20px rgba(255,68,68,0.4)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0px)";
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            🔒 Complete Month Closing
+          </button>
         </div>
       </div>
 
@@ -324,52 +548,6 @@ export default function Reports({
           </div>
         </div>
       )}
-
-      {/* Action Buttons */}
-      <div style={{ display: "flex", justifyContent: "center", gap: "15px", marginTop: "30px", flexWrap: "wrap" }}>
-        <button
-          onClick={() => window.print()}
-          style={{
-            background: "linear-gradient(135deg, #FFD700, #B8860B)",
-            color: "#0a0a0a",
-            border: "none",
-            padding: "12px 24px",
-            borderRadius: "10px",
-            fontWeight: "bold",
-            cursor: "pointer",
-            transition: "0.3s",
-            fontSize: "14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
-          🖨️ Print Report
-        </button>
-
-        <button
-          onClick={() => {
-            const summary = `🏋️ IBRAAJ FITNESS REPORT\n${monthYear || "Monthly Report"}\n\n━━━━━━━━━━━━━━━━━━━━\n\n📊 SUMMARY\n━━━━━━━━━━━━━━━━━━━━\n👥 Total Members: ${safeMembers.length}\n💰 Total Income: ${safeFormatPKR(totalIncome)}\n💸 Total Expenses: ${safeFormatPKR(totalExpense)}\n📈 Net Profit: ${safeFormatPKR(netProfit)}\n\n💳 PAYMENT BREAKDOWN\n━━━━━━━━━━━━━━━━━━━━\n💵 Cash: ${safeFormatPKR(cashPayments)}\n🌐 Online: ${safeFormatPKR(onlinePayments)}\n💳 Card: ${safeFormatPKR(cardPayments)}\n📱 JazzCash: ${safeFormatPKR(jazzCashPayments)}\n\n━━━━━━━━━━━━━━━━━━━━\n📍 IBRAAJ FITNESS GYM\n━━━━━━━━━━━━━━━━━━━━`;
-            alert(summary);
-          }}
-          style={{
-            background: "linear-gradient(135deg, #FFC107, #FF8F00)",
-            color: "#0a0a0a",
-            border: "none",
-            padding: "12px 24px",
-            borderRadius: "10px",
-            fontWeight: "bold",
-            cursor: "pointer",
-            transition: "0.3s",
-            fontSize: "14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
-          📋 Quick Summary
-        </button>
-      </div>
     </div>
   );
 }
