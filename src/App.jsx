@@ -22,6 +22,7 @@ import Accounts from "./pages/Accounts";
 import Expenses from "./pages/Expenses";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import MonthClosing from "./pages/MonthClosing";
 
 function Layout({ children }) {
   return (
@@ -115,14 +116,16 @@ function App() {
     (m.memberId || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // ✅ Updated addMember - only saves paidDate, no manual dueDate
+  // ✅ Updated addMember with proper unique ID generation
   const addMember = async () => {
-    if (!name || !phone) { alert("Name aur Phone likho"); return; }
+    if (!name || !phone) { 
+      alert("Name aur Phone likho"); 
+      return; 
+    }
     
     let finalFeeStatus = feeStatus;
     let paidDateValue = null;
     
-    // Agar Paid hai to paidDate save karo
     if (feeStatus === "Paid" && paidFee && Number(paidFee) >= Number(monthlyFee)) {
       finalFeeStatus = "Paid";
       paidDateValue = new Date().toISOString().split("T")[0];
@@ -136,14 +139,25 @@ function App() {
         monthlyFee, 
         paidFee, 
         paidDate: paidDateValue,
-        dueDate: "" // dueDate ab save nahi karenge
       });
       alert("Member Updated");
       setEditingId(null);
     } else {
-      const memberId = `IBF-${String(members.length + 1).padStart(4, "0")}`;
+      // ✅ Generate unique ID based on highest existing ID
+      const lastNumber = members.reduce((max, member) => {
+        const num = parseInt(
+          (member.memberId || "IBF-0000").replace("IBF-", "")
+        ) || 0;
+        return Math.max(max, num);
+      }, 0);
+      
+      const memberId = `IBF-${String(lastNumber + 1).padStart(4, "0")}`;
+      
       await addDoc(membersRef, { 
-        memberId, name, phone, plan, 
+        memberId,
+        name, 
+        phone, 
+        plan, 
         feeStatus: finalFeeStatus, 
         paymentMethod, 
         monthlyFee, 
@@ -154,14 +168,65 @@ function App() {
       });
       alert("Member Added — ID: " + memberId);
     }
-    setName(""); setPhone(""); setPlan("Self Training"); setFeeStatus("Unpaid"); 
-    setPaymentMethod("Cash"); setMonthlyFee(""); setPaidFee(""); setDueDate("");
+    
+    setName(""); 
+    setPhone(""); 
+    setPlan("Self Training"); 
+    setFeeStatus("Unpaid"); 
+    setPaymentMethod("Cash"); 
+    setMonthlyFee(""); 
+    setPaidFee(""); 
+    setDueDate("");
     fetchMembers();
   };
 
-  const deleteMember = async (id) => { await deleteDoc(doc(db, "members", id)); fetchMembers(); };
+  // ✅ Fix Duplicate IDs - Only rename duplicate members
+  const fixDuplicateIDs = async () => {
+    const ids = {};
+    const duplicates = [];
+    
+    members.forEach(member => {
+      if (member.memberId) {
+        if (ids[member.memberId]) {
+          duplicates.push(member);
+        } else {
+          ids[member.memberId] = true;
+        }
+      }
+    });
+    
+    if (duplicates.length === 0) {
+      alert("No duplicate IDs found! ✅");
+      return;
+    }
+    
+    // Get highest ID
+    const lastNumber = members.reduce((max, member) => {
+      const num = parseInt(
+        (member.memberId || "IBF-0000").replace("IBF-", "")
+      ) || 0;
+      return Math.max(max, num);
+    }, 0);
+    
+    let nextNumber = lastNumber + 1;
+    
+    for (const member of duplicates) {
+      const newId = `IBF-${String(nextNumber).padStart(4, "0")}`;
+      await updateDoc(doc(db, "members", member.id), {
+        memberId: newId
+      });
+      nextNumber++;
+    }
+    
+    alert(`✅ ${duplicates.length} duplicate IDs fixed!`);
+    fetchMembers();
+  };
+
+  const deleteMember = async (id) => { 
+    await deleteDoc(doc(db, "members", id)); 
+    fetchMembers(); 
+  };
   
-  // ✅ Updated markAttendance to save to attendanceHistory
   const markAttendance = async (member) => {
     const today = new Date().toISOString().split("T")[0];
     try {
@@ -183,15 +248,27 @@ function App() {
   };
   
   const addExpense = async () => {
-    if (!expenseName || !expenseAmount) { alert("Expense Name aur Amount likho"); return; }
-    await addDoc(expensesRef, { title: expenseName, amount: Number(expenseAmount), date: new Date().toLocaleDateString() });
-    setExpenseName(""); setExpenseAmount("");
+    if (!expenseName || !expenseAmount) { 
+      alert("Expense Name aur Amount likho"); 
+      return; 
+    }
+    await addDoc(expensesRef, { 
+      title: expenseName, 
+      amount: Number(expenseAmount), 
+      date: new Date().toLocaleDateString() 
+    });
+    setExpenseName(""); 
+    setExpenseAmount("");
     fetchExpenses();
     alert("Expense Added");
   };
   
   const deleteExpense = async (id) => {
-    if (window.confirm("Delete this expense?")) { await deleteDoc(doc(db, "expenses", id)); fetchExpenses(); alert("Expense deleted!"); }
+    if (window.confirm("Delete this expense?")) { 
+      await deleteDoc(doc(db, "expenses", id)); 
+      fetchExpenses(); 
+      alert("Expense deleted!"); 
+    }
   };
 
   const todayStr = currentTime.toLocaleDateString("en-GB");
@@ -224,7 +301,36 @@ function App() {
           <Route path="/expenses" element={<ProtectedRoute><Layout><Expenses expenseName={expenseName} setExpenseName={setExpenseName} expenseAmount={expenseAmount} setExpenseAmount={setExpenseAmount} addExpense={addExpense} deleteExpense={deleteExpense} expenses={expenses} formatPKR={formatPKR} /></Layout></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Layout><Reports members={members} totalIncome={totalIncome} totalExpense={totalExpense} netProfit={netProfit} cashPayments={cashPayments} onlinePayments={onlinePayments} cardPayments={cardPayments} jazzCashPayments={jazzCashPayments} monthYear={monthYear} formatPKR={formatPKR} /></Layout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
+          
+          {/* ✅ Month Closing Route */}
+          <Route path="/month-closing" element={
+            <ProtectedRoute>
+              <Layout>
+                <MonthClosing members={members} />
+              </Layout>
+            </ProtectedRoute>
+          } />
         </Routes>
+        
+        {/* ✅ Fix Duplicate IDs Button - Only for Admin */}
+        <div style={{ position: "fixed", bottom: "10px", right: "10px", zIndex: 999 }}>
+          <button
+            onClick={fixDuplicateIDs}
+            style={{
+              background: "linear-gradient(135deg, #ff8800, #cc6600)",
+              color: "white",
+              border: "none",
+              padding: "8px 16px",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: "bold",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+            }}
+          >
+            🔧 Fix Duplicate IDs
+          </button>
+        </div>
       </AuthProvider>
     </BrowserRouter>
   );
