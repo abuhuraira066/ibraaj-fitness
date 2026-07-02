@@ -8,6 +8,7 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
+  runTransaction,
 } from "firebase/firestore";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -61,8 +62,33 @@ function App() {
   }, []);
 
   const fetchMembers = async () => {
-    const data = await getDocs(membersRef);
-    setMembers(data.docs.map((item) => ({ ...item.data(), id: item.id })));
+    console.log("🔄 Fetching members from Firebase...");
+    try {
+      const querySnapshot = await getDocs(membersRef);
+      console.log("📄 Query Snapshot Size:", querySnapshot.size);
+      
+      if (querySnapshot.size === 0) {
+        console.warn("⚠️ No documents found in members collection!");
+        setMembers([]);
+        return;
+      }
+      
+      const membersData = [];
+      querySnapshot.forEach((doc) => {
+        membersData.push({ id: doc.id, ...doc.data() });
+      });
+      
+      membersData.sort((a, b) => {
+        const numA = parseInt((a.memberId || "IBF-0000").replace("IBF-", ""));
+        const numB = parseInt((b.memberId || "IBF-0000").replace("IBF-", ""));
+        return numA - numB;
+      });
+      
+      console.log("✅ Total Members Loaded:", membersData.length);
+      setMembers(membersData);
+    } catch (error) {
+      console.error("❌ Error fetching members:", error);
+    }
   };
 
   const fetchExpenses = async () => {
@@ -116,68 +142,118 @@ function App() {
     (m.memberId || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // ✅ Updated addMember with proper unique ID generation
+  // ✅ Updated addMember with Counter-Based ID System + Debug Logs + Verification
   const addMember = async () => {
-    if (!name || !phone) { 
-      alert("Name aur Phone likho"); 
-      return; 
+    if (!name || !phone) {
+      alert("Name aur Phone likho");
+      return;
     }
-    
+
     let finalFeeStatus = feeStatus;
     let paidDateValue = null;
-    
-    if (feeStatus === "Paid" && paidFee && Number(paidFee) >= Number(monthlyFee)) {
+
+    if (
+      feeStatus === "Paid" &&
+      paidFee &&
+      Number(paidFee) >= Number(monthlyFee)
+    ) {
       finalFeeStatus = "Paid";
       paidDateValue = new Date().toISOString().split("T")[0];
     }
-    
-    if (editingId) {
-      await updateDoc(doc(db, "members", editingId), { 
-        name, phone, plan, 
-        feeStatus: finalFeeStatus, 
-        paymentMethod, 
-        monthlyFee, 
-        paidFee, 
-        paidDate: paidDateValue,
-      });
-      alert("Member Updated");
-      setEditingId(null);
-    } else {
-      // ✅ Generate unique ID based on highest existing ID
-      const lastNumber = members.reduce((max, member) => {
-        const num = parseInt(
-          (member.memberId || "IBF-0000").replace("IBF-", "")
-        ) || 0;
-        return Math.max(max, num);
-      }, 0);
-      
-      const memberId = `IBF-${String(lastNumber + 1).padStart(4, "0")}`;
-      
-      await addDoc(membersRef, { 
-        memberId,
-        name, 
-        phone, 
-        plan, 
-        feeStatus: finalFeeStatus, 
-        paymentMethod, 
-        monthlyFee, 
-        paidFee, 
-        paidDate: paidDateValue,
-        joinDate: new Date().toLocaleDateString(), 
-        status: "active" 
-      });
-      alert("Member Added — ID: " + memberId);
+
+    try {
+      if (editingId) {
+        await updateDoc(doc(db, "members", editingId), {
+          name,
+          phone,
+          plan,
+          feeStatus: finalFeeStatus,
+          paymentMethod,
+          monthlyFee,
+          paidFee,
+          paidDate: paidDateValue,
+        });
+
+        alert("✅ Member Updated");
+        setEditingId(null);
+      } else {
+        // ✅ Professional Counter - Transaction based ID generation
+        const counterRef = doc(db, "counters", "members");
+
+        console.log("🔄 Starting transaction...");
+        
+        const memberId = await runTransaction(db, async (transaction) => {
+          console.log("📥 Getting counter document...");
+          const counterDoc = await transaction.get(counterRef);
+
+          console.log("📄 Counter exists:", counterDoc.exists());
+
+          if (!counterDoc.exists()) {
+            console.error("❌ Counter document not found!");
+            throw new Error(
+              "Counter document not found. Please create counters/members."
+            );
+          }
+
+          const lastId = counterDoc.data().lastId || 0;
+          const nextId = lastId + 1;
+
+          console.log("🔢 Last ID:", lastId);
+          console.log("🔢 Next ID:", nextId);
+
+          console.log("📝 Updating counter...");
+          transaction.update(counterRef, {
+            lastId: nextId,
+          });
+
+          console.log("✅ Counter update scheduled");
+
+          return `IBF-${String(nextId).padStart(4, "0")}`;
+        });
+
+        console.log("🆕 Generated Member ID:", memberId);
+
+        // ✅ VERIFY: Counter ko manual update karo (safety check)
+        await updateDoc(doc(db, "counters", "members"), {
+          lastId: parseInt(memberId.replace("IBF-", "")),
+        });
+
+        console.log("✅ Counter Updated!");
+
+        console.log("💾 Adding member to database...");
+
+        await addDoc(membersRef, {
+          memberId,
+          name,
+          phone,
+          plan,
+          feeStatus: finalFeeStatus,
+          paymentMethod,
+          monthlyFee,
+          paidFee,
+          paidDate: paidDateValue,
+          joinDate: new Date().toLocaleDateString(),
+          status: "active",
+        });
+
+        console.log("✅ Member added successfully!");
+        alert("✅ Member Added — ID: " + memberId);
+      }
+
+      setName("");
+      setPhone("");
+      setPlan("Self Training");
+      setFeeStatus("Unpaid");
+      setPaymentMethod("Cash");
+      setMonthlyFee("");
+      setPaidFee("");
+      setDueDate("");
+
+      await fetchMembers();
+    } catch (error) {
+      console.error("❌ Error in addMember:", error);
+      alert(error.message);
     }
-    
-    setName(""); 
-    setPhone(""); 
-    setPlan("Self Training"); 
-    setFeeStatus("Unpaid"); 
-    setPaymentMethod("Cash"); 
-    setMonthlyFee(""); 
-    setPaidFee(""); 
-    setDueDate("");
-    fetchMembers();
   };
 
   // ✅ Fix Duplicate IDs - Only rename duplicate members
@@ -302,7 +378,6 @@ function App() {
           <Route path="/reports" element={<ProtectedRoute><Layout><Reports members={members} totalIncome={totalIncome} totalExpense={totalExpense} netProfit={netProfit} cashPayments={cashPayments} onlinePayments={onlinePayments} cardPayments={cardPayments} jazzCashPayments={jazzCashPayments} monthYear={monthYear} formatPKR={formatPKR} /></Layout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           
-          {/* ✅ Month Closing Route */}
           <Route path="/month-closing" element={
             <ProtectedRoute>
               <Layout>
@@ -312,7 +387,6 @@ function App() {
           } />
         </Routes>
         
-        {/* ✅ Fix Duplicate IDs Button - Only for Admin */}
         <div style={{ position: "fixed", bottom: "10px", right: "10px", zIndex: 999 }}>
           <button
             onClick={fixDuplicateIDs}

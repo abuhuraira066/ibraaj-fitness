@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
-// ✅ CORRECT API KEY - Firebase Console se copy kiya hua
+// ✅ CORRECT CONFIG - Firebase Console se copy kiya hua
 const firebaseConfig = {
   apiKey: "AIzaSyDvoT265Lz1xOWA9gpnkdE0FzNOfTBbcHU",
   authDomain: "ibraaj-fitness.firebaseapp.com",

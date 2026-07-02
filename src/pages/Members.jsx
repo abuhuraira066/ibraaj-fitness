@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { db } from "../firebase";
-import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, updateDoc, doc, runTransaction } from "firebase/firestore";
 
 export default function Members({
   members,
@@ -26,7 +26,6 @@ export default function Members({
   setDueDate,
   editingId,
   setEditingId,
-  addMember,
   deleteMember,
   markAttendance,
   formatPKR,
@@ -34,7 +33,7 @@ export default function Members({
 }) {
   const navigate = useNavigate();
   const [viewFilter, setViewFilter] = useState("all");
-  const [isNewAdmission, setIsNewAdmission] = useState(false); // ✅ New State
+  const [isNewAdmission, setIsNewAdmission] = useState(false);
 
   const safeFormatPKR = (amount) => {
     if (formatPKR && typeof formatPKR === 'function') return formatPKR(amount);
@@ -76,7 +75,6 @@ export default function Members({
     }
   };
 
-  // ✅ Toggle New Admission
   const toggleNewAdmission = async (member) => {
     try {
       const newValue = member.isNewAdmission ? false : true;
@@ -91,7 +89,6 @@ export default function Members({
     }
   };
 
-  // ✅ Auto calculate remaining days
   const getRemainingDaysData = (member) => {
     if (member.feeStatus === "Paid" && Number(member.paidFee) >= Number(member.monthlyFee)) {
       const baseDate = member.paidDate ? new Date(member.paidDate) : new Date(member.joinDate);
@@ -124,18 +121,15 @@ export default function Members({
     return { text: "Not Set", color: "#9ca3af", type: "not-set", days: null };
   };
 
-  // ✅ Filter for New Admissions
   const getNewAdmissions = (allMembers) => {
     return allMembers.filter(m => m.isNewAdmission === true);
   };
 
-  // ✅ Apply filters
   let displayMembers = Array.isArray(filteredMembers) ? filteredMembers : [];
   if (viewFilter === "newAdmissions") {
     displayMembers = getNewAdmissions(displayMembers);
   }
 
-  // ✅ Reset form after add
   const resetForm = () => {
     setName("");
     setPhone("");
@@ -149,7 +143,7 @@ export default function Members({
     setEditingId(null);
   };
 
-  // ✅ Custom add member with isNewAdmission
+  // ✅ UPDATED: handleAddMember with Counter-Based ID System
   const handleAddMember = async () => {
     if (!name || !phone) {
       alert("Name aur Phone likho");
@@ -164,47 +158,87 @@ export default function Members({
       paidDateValue = new Date().toISOString().split("T")[0];
     }
     
-    if (editingId) {
-      await updateDoc(doc(db, "members", editingId), { 
-        name, phone, plan, 
-        feeStatus: finalFeeStatus, 
-        paymentMethod, 
-        monthlyFee, 
-        paidFee, 
-        paidDate: paidDateValue,
-        isNewAdmission: isNewAdmission,
-      });
-      alert("Member Updated");
-      resetForm();
-    } else {
-      const lastNumber = members.reduce((max, member) => {
-        const num = parseInt(
-          (member.memberId || "IBF-0000").replace("IBF-", "")
-        ) || 0;
-        return Math.max(max, num);
-      }, 0);
+    try {
+      if (editingId) {
+        await updateDoc(doc(db, "members", editingId), { 
+          name, phone, plan, 
+          feeStatus: finalFeeStatus, 
+          paymentMethod, 
+          monthlyFee, 
+          paidFee, 
+          paidDate: paidDateValue,
+          isNewAdmission: isNewAdmission,
+        });
+        alert("✅ Member Updated");
+        resetForm();
+      } else {
+        // ✅ COUNTER-BASED ID SYSTEM WITH TRANSACTION
+        const counterRef = doc(db, "counters", "members");
+        
+        console.log("🔄 Starting transaction from Members page...");
+        
+        const memberId = await runTransaction(db, async (transaction) => {
+          console.log("📥 Getting counter document...");
+          const counterDoc = await transaction.get(counterRef);
+
+          console.log("📄 Counter exists:", counterDoc.exists());
+
+          if (!counterDoc.exists()) {
+            console.error("❌ Counter document not found!");
+            throw new Error(
+              "Counter document not found. Please create counters/members."
+            );
+          }
+
+          const lastId = counterDoc.data().lastId || 0;
+          const nextId = lastId + 1;
+
+          console.log("🔢 Last ID:", lastId);
+          console.log("🔢 Next ID:", nextId);
+
+          console.log("📝 Updating counter...");
+          transaction.update(counterRef, {
+            lastId: nextId,
+          });
+
+          console.log("✅ Counter update scheduled");
+
+          return `IBF-${String(nextId).padStart(4, "0")}`;
+        });
+
+        console.log("🆕 Generated Member ID:", memberId);
+
+        // ✅ Safety Check: Manual counter update
+        await updateDoc(doc(db, "counters", "members"), {
+          lastId: parseInt(memberId.replace("IBF-", "")),
+        });
+
+        console.log("✅ Counter Updated!");
+
+        await addDoc(collection(db, "members"), { 
+          memberId,
+          name, 
+          phone, 
+          plan, 
+          feeStatus: finalFeeStatus, 
+          paymentMethod, 
+          monthlyFee, 
+          paidFee, 
+          paidDate: paidDateValue,
+          joinDate: new Date().toLocaleDateString(), 
+          status: "active",
+          isNewAdmission: isNewAdmission,
+        });
+        
+        alert(`✅ Member Added — ID: ${memberId} ${isNewAdmission ? '🆕 (New Admission)' : ''}`);
+        resetForm();
+      }
       
-      const memberId = `IBF-${String(lastNumber + 1).padStart(4, "0")}`;
-      
-      await addDoc(collection(db, "members"), { 
-        memberId,
-        name, 
-        phone, 
-        plan, 
-        feeStatus: finalFeeStatus, 
-        paymentMethod, 
-        monthlyFee, 
-        paidFee, 
-        paidDate: paidDateValue,
-        joinDate: new Date().toLocaleDateString(), 
-        status: "active",
-        isNewAdmission: isNewAdmission,
-      });
-      alert(`Member Added — ID: ${memberId} ${isNewAdmission ? '🆕 (New Admission)' : ''}`);
-      resetForm();
+      window.location.reload();
+    } catch (error) {
+      console.error("❌ Error in handleAddMember:", error);
+      alert(error.message);
     }
-    
-    window.location.reload();
   };
 
   return (
@@ -228,7 +262,6 @@ export default function Members({
         <input placeholder="Paid Fee" value={paidFee} onChange={(e) => setPaidFee(e.target.value)} style={{ background: "#0a0a0a", border: "1px solid #FFD700", color: "white", padding: "12px", borderRadius: "10px", width: "140px" }} />
         <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ background: "#0a0a0a", border: "1px solid #FFD700", color: "white", padding: "12px", borderRadius: "10px" }} />
         
-        {/* ✅ New Admission Checkbox */}
         <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "#00eaff", fontWeight: "bold", cursor: "pointer" }}>
           <input
             type="checkbox"
