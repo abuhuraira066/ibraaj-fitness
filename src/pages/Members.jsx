@@ -89,35 +89,20 @@ export default function Members({
     }
   };
 
+  // ✅ UPDATED: Sirf dueDate se Remaining Days calculate karo
   const getRemainingDaysData = (member) => {
-    if (member.feeStatus === "Paid" && Number(member.paidFee) >= Number(member.monthlyFee)) {
-      const baseDate = member.paidDate ? new Date(member.paidDate) : new Date(member.joinDate);
-      const dueDate = new Date(baseDate);
-      dueDate.setDate(dueDate.getDate() + 30);
+    if (member.dueDate) {
       const today = new Date();
+      const due = new Date(member.dueDate);
       today.setHours(0, 0, 0, 0);
-      dueDate.setHours(0, 0, 0, 0);
-      const remainingDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+      due.setHours(0, 0, 0, 0);
+      const remainingDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
       
       if (remainingDays > 7) return { text: `${remainingDays} Days Left`, color: "#00ff88", type: "upcoming", days: remainingDays };
       if (remainingDays > 0) return { text: `${remainingDays} Days Left`, color: "#ffcc00", type: "upcoming", days: remainingDays };
       if (remainingDays === 0) return { text: "Due Today", color: "#ffcc00", type: "today", days: 0 };
       return { text: `${Math.abs(remainingDays)} Days Overdue`, color: "#ff4444", type: "overdue", days: remainingDays };
     }
-    
-    if (member.dueDate) {
-      const today = new Date();
-      const due = new Date(member.dueDate);
-      today.setHours(0, 0, 0, 0);
-      due.setHours(0, 0, 0, 0);
-      const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-      
-      if (diffDays > 7) return { text: `${diffDays} Days Left`, color: "#00ff88", type: "upcoming", days: diffDays };
-      if (diffDays > 0) return { text: `${diffDays} Days Left`, color: "#ffcc00", type: "upcoming", days: diffDays };
-      if (diffDays === 0) return { text: "Due Today", color: "#ffcc00", type: "today", days: 0 };
-      return { text: `${Math.abs(diffDays)} Days Overdue`, color: "#ff4444", type: "overdue", days: diffDays };
-    }
-    
     return { text: "Not Set", color: "#9ca3af", type: "not-set", days: null };
   };
 
@@ -143,7 +128,7 @@ export default function Members({
     setEditingId(null);
   };
 
-  // ✅ UPDATED: handleAddMember with Counter-Based ID System
+  // ✅ UPDATED: handleAddMember with dueDate saved
   const handleAddMember = async () => {
     if (!name || !phone) {
       alert("Name aur Phone likho");
@@ -160,6 +145,7 @@ export default function Members({
     
     try {
       if (editingId) {
+        // ✅ UPDATE: dueDate added
         await updateDoc(doc(db, "members", editingId), { 
           name, phone, plan, 
           feeStatus: finalFeeStatus, 
@@ -167,6 +153,7 @@ export default function Members({
           monthlyFee, 
           paidFee, 
           paidDate: paidDateValue,
+          dueDate: dueDate, // ✅ ADDED
           isNewAdmission: isNewAdmission,
         });
         alert("✅ Member Updated");
@@ -215,6 +202,7 @@ export default function Members({
 
         console.log("✅ Counter Updated!");
 
+        // ✅ ADD: dueDate added
         await addDoc(collection(db, "members"), { 
           memberId,
           name, 
@@ -225,6 +213,7 @@ export default function Members({
           monthlyFee, 
           paidFee, 
           paidDate: paidDateValue,
+          dueDate: dueDate, // ✅ ADDED
           joinDate: new Date().toLocaleDateString(), 
           status: "active",
           isNewAdmission: isNewAdmission,

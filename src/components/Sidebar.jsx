@@ -261,6 +261,43 @@ export default function Sidebar() {
           <span>Expenses</span>
         </Link>
 
+        {/* ✅ Daily Report Link - ADDED */}
+        <Link
+          to="/daily-report"
+          style={{
+            background: "linear-gradient(135deg, #1a1a1a 0%, #111111 100%)",
+            color: "#FFD700",
+            border: "1px solid #FFD700",
+            boxShadow: "0 0 10px rgba(255,215,0,0.4)",
+            padding: "14px 18px",
+            borderRadius: "12px",
+            cursor: "pointer",
+            fontWeight: "bold",
+            fontSize: "15px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            transition: "all 0.3s ease",
+            width: "100%",
+            textDecoration: "none",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "linear-gradient(135deg, #FFD700 0%, #B8860B 100%)";
+            e.currentTarget.style.color = "#0a0a0a";
+            e.currentTarget.style.transform = "translateX(5px)";
+            e.currentTarget.style.boxShadow = "0 0 20px rgba(255,215,0,0.8)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "linear-gradient(135deg, #1a1a1a 0%, #111111 100%)";
+            e.currentTarget.style.color = "#FFD700";
+            e.currentTarget.style.transform = "translateX(0px)";
+            e.currentTarget.style.boxShadow = "0 0 10px rgba(255,215,0,0.4)";
+          }}
+        >
+          <span style={{ fontSize: "20px" }}>📝</span>
+          <span>Daily Report</span>
+        </Link>
+
         <Link
           to="/reports"
           style={{
@@ -342,7 +379,7 @@ export default function Sidebar() {
           <span>Settings</span>
         </Link>
 
-        {/* ✅ Logout Button Added */}
+        {/* ✅ Logout Button */}
         <button
           onClick={handleLogout}
           style={{

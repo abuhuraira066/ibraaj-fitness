@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import Receipt from "../components/Receipt";
 
 export default function MemberProfile() {
   const { id } = useParams();
@@ -10,6 +11,7 @@ export default function MemberProfile() {
   const [payments, setPayments] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [loading, setLoading] = useState(true);
+  const receiptRef = useRef(null);
 
   useEffect(() => {
     if (id) {
@@ -24,7 +26,6 @@ export default function MemberProfile() {
     try {
       console.log("Fetching member with ID:", id);
       
-      // Fetch member details
       const memberDoc = await getDoc(doc(db, "members", id));
       console.log("Member doc exists:", memberDoc.exists());
       
@@ -36,7 +37,6 @@ export default function MemberProfile() {
         return;
       }
 
-      // Fetch payment history
       try {
         const paymentsQuery = query(collection(db, "payments"), where("memberId", "==", id));
         const paymentsData = await getDocs(paymentsQuery);
@@ -45,7 +45,6 @@ export default function MemberProfile() {
         console.error("Error fetching payments:", err);
       }
 
-      // Fetch attendance history
       try {
         const attendanceQuery = query(collection(db, "attendanceHistory"), where("memberId", "==", id));
         const attendanceData = await getDocs(attendanceQuery);
@@ -59,6 +58,73 @@ export default function MemberProfile() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ✅ handlePrint function
+  const handlePrint = () => {
+    const receipt = document.getElementById("receipt");
+
+    if (!receipt) return;
+
+    const printWindow = window.open("", "_blank");
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>IBRAAJ FITNESS Receipt</title>
+          <style>
+            body { margin: 0; padding: 0; font-family: Arial, sans-serif; background: #fff; }
+            #receipt {
+              width: 700px;
+              margin: 20px auto;
+              background: #fff;
+              color: #000;
+              padding: 30px;
+              border: 2px solid #000;
+              border-radius: 8px;
+            }
+            table { width: 100%; border-collapse: collapse; }
+            td { padding: 8px 5px; border-bottom: 1px solid #eee; }
+            td:first-child { font-weight: bold; color: #555; width: 40%; }
+            td:last-child { text-align: right; }
+            hr { border: 1px solid #000; margin: 15px 0; }
+            .header { text-align: center; }
+            .header h1 { margin-bottom: 0; color: #000; }
+            .header h3 { margin-top: 5px; color: #333; }
+            .footer { text-align: center; margin-top: 20px; }
+            .footer h3 { margin: 5px 0; }
+            .status-paid { color: #00a651; font-weight: bold; }
+            .status-unpaid { color: #ff0000; font-weight: bold; }
+            @media print {
+              body { margin: 0; padding: 0; }
+              #receipt { 
+                border: 2px solid #000; 
+                border-radius: 0;
+                margin: 0 auto;
+                width: 100%;
+                max-width: 700px;
+                box-shadow: none;
+              }
+              .no-print { display: none !important; }
+            }
+          </style>
+        </head>
+        <body>
+          ${receipt.innerHTML}
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1000);
+            };
+          <\/script>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
   };
 
   const formatPKR = (amount) => {
@@ -76,7 +142,6 @@ export default function MemberProfile() {
     return `${day}/${month}/${year}`;
   };
 
-  // Calculate Remaining Days for Due Date
   const getRemainingDays = (dueDate) => {
     if (!dueDate) return { text: "Not Set", color: "#9ca3af", type: "not-set" };
     
@@ -133,20 +198,39 @@ export default function MemberProfile() {
 
   return (
     <div>
+      {/* ✅ Gold Theme Print Receipt Button - Only */}
       <button
-        onClick={() => navigate("/members")}
+        onClick={handlePrint}
         style={{
-          background: "rgba(255,215,0,0.1)",
-          border: "1px solid #FFD700",
-          color: "#FFD700",
-          padding: "8px 16px",
-          borderRadius: "8px",
+          background: "linear-gradient(135deg, #FFD700, #B8860B)",
+          color: "#0a0a0a",
+          border: "none",
+          padding: "12px 24px",
+          borderRadius: "10px",
           cursor: "pointer",
+          fontWeight: "bold",
+          fontSize: "15px",
+          transition: "0.3s",
+          boxShadow: "0 2px 10px rgba(255,215,0,0.3)",
           marginBottom: "20px",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "translateY(-3px)";
+          e.currentTarget.style.boxShadow = "0 8px 25px rgba(255,215,0,0.5)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "translateY(0px)";
+          e.currentTarget.style.boxShadow = "0 2px 10px rgba(255,215,0,0.3)";
         }}
       >
-        ← Back to Members
+        🧾 Print Receipt
       </button>
+
+      {/* ✅ Receipt Component (Hidden) */}
+      <Receipt member={member} />
 
       <div style={{
         background: "linear-gradient(135deg, #0a0a0a, #0f0f0f)",

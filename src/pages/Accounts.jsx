@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export default function Accounts({
   expenses,
   expenseName,
@@ -11,6 +13,20 @@ export default function Accounts({
   formatPKR,
 }) {
   
+  // ✅ Password Lock - Owner Access
+  const OWNER_PASSWORD = "Ibrahim@123";
+  const [password, setPassword] = useState("");
+  const [isUnlocked, setIsUnlocked] = useState(false);
+
+  const handleUnlock = () => {
+    if (password === OWNER_PASSWORD) {
+      setIsUnlocked(true);
+    } else {
+      alert("❌ Wrong Password");
+      setPassword("");
+    }
+  };
+
   // ✅ Safe formatPKR function
   const safeFormatPKR = (amount) => {
     if (formatPKR && typeof formatPKR === 'function') {
@@ -24,6 +40,80 @@ export default function Accounts({
     }).format(amount || 0);
   };
 
+  // 🔒 Lock Screen
+  if (!isUnlocked) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "80vh",
+        }}
+      >
+        <div
+          style={{
+            background: "#111",
+            padding: "40px",
+            borderRadius: "15px",
+            border: "1px solid #FFD700",
+            width: "350px",
+            textAlign: "center",
+          }}
+        >
+          <h2 style={{ color: "#FFD700" }}>
+            🔒 Owner Access
+          </h2>
+
+          <p style={{ color: "#bbb" }}>
+            Enter Owner Password
+          </p>
+
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleUnlock();
+              }
+            }}
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginTop: "20px",
+              borderRadius: "8px",
+              border: "1px solid #FFD700",
+              background: "#000",
+              color: "white",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <button
+            onClick={handleUnlock}
+            style={{
+              width: "100%",
+              marginTop: "20px",
+              padding: "12px",
+              background: "#FFD700",
+              color: "#000",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            Unlock
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Main Content (only visible when unlocked)
   return (
     <div>
       <h1

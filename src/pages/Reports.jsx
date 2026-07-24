@@ -22,6 +22,20 @@ export default function Reports({
   const [showModal, setShowModal] = useState(false);
   const [resetting, setResetting] = useState(false);
 
+  // ✅ Password Lock - Owner Access
+  const OWNER_PASSWORD = "Ibrahim@123";
+  const [password, setPassword] = useState("");
+  const [isUnlocked, setIsUnlocked] = useState(false);
+
+  const handleUnlock = () => {
+    if (password === OWNER_PASSWORD) {
+      setIsUnlocked(true);
+    } else {
+      alert("❌ Wrong Password");
+      setPassword("");
+    }
+  };
+
   // Safe formatPKR function
   const safeFormatPKR = (amount) => {
     if (amount === undefined || amount === null) return "Rs 0";
@@ -56,7 +70,6 @@ export default function Reports({
 
   const handlePlanClick = (planName) => {
     if (planName === "New Admissions") {
-      // Show modal for New Admissions members
       setSelectedPlan(planName);
       setShowModal(true);
       return;
@@ -216,6 +229,80 @@ export default function Reports({
 
   const newAdmissionsCount = getNewAdmissions().length;
 
+  // 🔒 Lock Screen
+  if (!isUnlocked) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "80vh",
+        }}
+      >
+        <div
+          style={{
+            background: "#111",
+            padding: "40px",
+            borderRadius: "15px",
+            border: "1px solid #FFD700",
+            width: "350px",
+            textAlign: "center",
+          }}
+        >
+          <h2 style={{ color: "#FFD700" }}>
+            🔒 Owner Access
+          </h2>
+
+          <p style={{ color: "#bbb" }}>
+            Enter Owner Password
+          </p>
+
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleUnlock();
+              }
+            }}
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginTop: "20px",
+              borderRadius: "8px",
+              border: "1px solid #FFD700",
+              background: "#000",
+              color: "white",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <button
+            onClick={handleUnlock}
+            style={{
+              width: "100%",
+              marginTop: "20px",
+              padding: "12px",
+              background: "#FFD700",
+              color: "#000",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            Unlock
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Main Content (only visible when unlocked)
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 10px" }}>
       <h1
@@ -344,7 +431,7 @@ export default function Reports({
           </div>
         </div>
 
-        {/* Plan Wise Report - with New Admissions at top */}
+        {/* Plan Wise Report */}
         <div style={{ background: "rgba(255,215,0,0.05)", border: "1px solid rgba(255,215,0,0.3)", borderRadius: "15px", padding: "25px", marginBottom: "25px" }}>
           <h2 style={{ color: "#FFD700", textAlign: "center", marginBottom: "20px", fontFamily: "Orbitron, sans-serif", fontSize: "clamp(18px, 4vw, 24px)" }}>
             🏋️ Plan Wise Members Breakdown

@@ -24,6 +24,7 @@ import Expenses from "./pages/Expenses";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import MonthClosing from "./pages/MonthClosing";
+import DailyReport from "./pages/DailyReport"; // ✅ ADDED
 
 function Layout({ children }) {
   return (
@@ -101,17 +102,9 @@ function App() {
     fetchExpenses();
   }, []);
 
-  // Auto calculate remaining days for due count
+  // ✅ UPDATED: Sirf dueDate se Remaining Days calculate karo
   const getRemainingDaysCount = (member) => {
-    if (member.feeStatus === "Paid" && Number(member.paidFee) >= Number(member.monthlyFee)) {
-      const baseDate = member.paidDate ? new Date(member.paidDate) : new Date(member.joinDate);
-      const dueDate = new Date(baseDate);
-      dueDate.setDate(dueDate.getDate() + 30);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      dueDate.setHours(0, 0, 0, 0);
-      return Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-    }
+    // Sirf dueDate check karo
     if (member.dueDate) {
       const today = new Date();
       const due = new Date(member.dueDate);
@@ -142,7 +135,7 @@ function App() {
     (m.memberId || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // ✅ Updated addMember with Counter-Based ID System + Debug Logs + Verification
+  // ✅ Updated addMember with Counter-Based ID System + Debug Logs + dueDate save
   const addMember = async () => {
     if (!name || !phone) {
       alert("Name aur Phone likho");
@@ -172,12 +165,12 @@ function App() {
           monthlyFee,
           paidFee,
           paidDate: paidDateValue,
+          dueDate: dueDate,
         });
 
         alert("✅ Member Updated");
         setEditingId(null);
       } else {
-        // ✅ Professional Counter - Transaction based ID generation
         const counterRef = doc(db, "counters", "members");
 
         console.log("🔄 Starting transaction...");
@@ -213,13 +206,11 @@ function App() {
 
         console.log("🆕 Generated Member ID:", memberId);
 
-        // ✅ VERIFY: Counter ko manual update karo (safety check)
         await updateDoc(doc(db, "counters", "members"), {
           lastId: parseInt(memberId.replace("IBF-", "")),
         });
 
         console.log("✅ Counter Updated!");
-
         console.log("💾 Adding member to database...");
 
         await addDoc(membersRef, {
@@ -232,6 +223,7 @@ function App() {
           monthlyFee,
           paidFee,
           paidDate: paidDateValue,
+          dueDate: dueDate,
           joinDate: new Date().toLocaleDateString(),
           status: "active",
         });
@@ -276,7 +268,6 @@ function App() {
       return;
     }
     
-    // Get highest ID
     const lastNumber = members.reduce((max, member) => {
       const num = parseInt(
         (member.memberId || "IBF-0000").replace("IBF-", "")
@@ -378,10 +369,20 @@ function App() {
           <Route path="/reports" element={<ProtectedRoute><Layout><Reports members={members} totalIncome={totalIncome} totalExpense={totalExpense} netProfit={netProfit} cashPayments={cashPayments} onlinePayments={onlinePayments} cardPayments={cardPayments} jazzCashPayments={jazzCashPayments} monthYear={monthYear} formatPKR={formatPKR} /></Layout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           
+          {/* ✅ Month Closing Route */}
           <Route path="/month-closing" element={
             <ProtectedRoute>
               <Layout>
                 <MonthClosing members={members} />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* ✅ Daily Report Route - ADDED */}
+          <Route path="/daily-report" element={
+            <ProtectedRoute>
+              <Layout>
+                <DailyReport />
               </Layout>
             </ProtectedRoute>
           } />
