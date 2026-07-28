@@ -2,56 +2,16 @@ import { useState, useEffect } from "react";
 import { db } from "../firebase";
 import {
   collection,
-  addDoc,
   getDocs,
   deleteDoc,
   doc,
 } from "firebase/firestore";
 
 export default function DailyReport() {
-  const [memberName, setMemberName] = useState("");
-  const [amount, setAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("Cash");
-  const [memberType, setMemberType] = useState("Existing Member");
   const [entries, setEntries] = useState([]);
 
   // ✅ Firebase Collection Reference
   const dailyReportRef = collection(db, "dailyReports");
-
-  // ✅ handleSave Function
-  const handleSave = async () => {
-    if (!memberName || !amount) {
-      alert("Please fill all fields.");
-      return;
-    }
-
-    try {
-      await addDoc(dailyReportRef, {
-        memberName,
-        amount: Number(amount),
-        paymentMethod,
-        memberType,
-        date: new Date().toISOString().split("T")[0],
-        time: new Date().toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        }),
-      });
-
-      alert("✅ Entry Saved Successfully");
-
-      setMemberName("");
-      setAmount("");
-      setPaymentMethod("Cash");
-      setMemberType("Existing Member");
-
-      fetchEntries();
-    } catch (error) {
-      console.error(error);
-      alert("❌ Failed to save entry");
-    }
-  };
 
   // ✅ Fetch Entries Function
   const fetchEntries = async () => {
@@ -105,88 +65,6 @@ export default function DailyReport() {
       >
         📒 Daily Report
       </h1>
-
-      {/* Form */}
-      <div
-        style={{
-          background: "rgba(255,215,0,0.05)",
-          border: "1px solid rgba(255,215,0,0.3)",
-          borderRadius: "15px",
-          padding: "30px",
-          marginBottom: "30px",
-        }}
-      >
-        <h2
-          style={{
-            textAlign: "center",
-            color: "#FFD700",
-            marginBottom: "25px",
-          }}
-        >
-          ➕ Add Daily Entry
-        </h2>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
-            gap: "20px",
-          }}
-        >
-          <input
-            placeholder="Member Name"
-            value={memberName}
-            onChange={(e) => setMemberName(e.target.value)}
-            style={inputStyle}
-          />
-
-          <input
-            type="number"
-            placeholder="Amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            style={inputStyle}
-          />
-
-          <select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
-            style={inputStyle}
-          >
-            <option>Cash</option>
-            <option>Online</option>
-            <option>Card</option>
-            <option>JazzCash / Easypaisa</option>
-          </select>
-
-          <select
-            value={memberType}
-            onChange={(e) => setMemberType(e.target.value)}
-            style={inputStyle}
-          >
-            <option>Existing Member</option>
-            <option>New Admission</option>
-          </select>
-        </div>
-
-        <div style={{ textAlign: "center", marginTop: "30px" }}>
-          <button
-            onClick={handleSave}
-            style={{
-              background: "linear-gradient(135deg,#FFD700,#B8860B)",
-              color: "#000",
-              border: "none",
-              padding: "14px 35px",
-              borderRadius: "10px",
-              fontWeight: "bold",
-              cursor: "pointer",
-              fontSize: "15px",
-            }}
-          >
-            💾 Save Entry
-          </button>
-        </div>
-      </div>
 
       {/* Summary */}
       <div
@@ -281,16 +159,16 @@ export default function DailyReport() {
 
                     <td style={tdStyle}>
                       <strong style={{ color: "#FFD700" }}>
-                        {entry.memberName}
+                        {entry.name || entry.memberName || "Unknown"}
                       </strong>
                     </td>
 
                     <td style={tdStyle}>
-                      {entry.memberType}
+                      {entry.memberType || "Existing Member"}
                     </td>
 
                     <td style={tdStyle}>
-                      {entry.paymentMethod}
+                      {entry.method || entry.paymentMethod || "Cash"}
                     </td>
 
                     <td
@@ -305,7 +183,7 @@ export default function DailyReport() {
 
                     <td style={tdStyle}>
                       <button
-                        onClick={() => handleDelete(entry.id)} // ✅ ADDED
+                        onClick={() => handleDelete(entry.id)}
                         style={{
                           background: "#ff4444",
                           border: "none",
@@ -345,14 +223,4 @@ const thStyle = {
 const tdStyle = {
   padding: "14px",
   borderBottom: "1px solid rgba(255,255,255,0.08)",
-};
-
-const inputStyle = {
-  background: "#0a0a0a",
-  color: "white",
-  border: "1px solid #FFD700",
-  borderRadius: "10px",
-  padding: "12px",
-  outline: "none",
-  fontSize: "14px",
 };

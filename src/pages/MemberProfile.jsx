@@ -1,7 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../firebase";
-import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+  addDoc,
+  updateDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import Receipt from "../components/Receipt";
 
 export default function MemberProfile() {
@@ -12,6 +22,11 @@ export default function MemberProfile() {
   const [attendance, setAttendance] = useState([]);
   const [loading, setLoading] = useState(true);
   const receiptRef = useRef(null);
+
+  // ✅ Payment Modal States
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [receiveAmount, setReceiveAmount] = useState("");
+  const [receiveMethod, setReceiveMethod] = useState("Cash");
 
   useEffect(() => {
     if (id) {
@@ -127,6 +142,63 @@ export default function MemberProfile() {
     printWindow.focus();
   };
 
+  // ✅ handleReceivePayment function
+  const handleReceivePayment = async () => {
+    if (!receiveAmount || Number(receiveAmount) <= 0) {
+      alert("Please enter a valid amount");
+      return;
+    }
+
+    try {
+      const today = new Date();
+
+      // 1️⃣ Update Member
+      await updateDoc(doc(db, "members", member.id), {
+        paidFee: Number(receiveAmount),
+        paymentMethod: receiveMethod,
+        feeStatus: "Paid",
+        paidDate: today.toISOString().split("T")[0],
+      });
+
+      // 2️⃣ Payment History
+      await addDoc(collection(db, "payments"), {
+        memberId: member.id,
+        memberCardId: member.memberId,
+        name: member.name,
+        amount: Number(receiveAmount),
+        method: receiveMethod,
+        date: today.toISOString().split("T")[0],
+        time: today.toLocaleTimeString(),
+        timestamp: serverTimestamp(),
+      });
+
+      // 3️⃣ Daily Collection
+      await addDoc(collection(db, "dailyReports"), {
+        memberId: member.id,
+        memberCardId: member.memberId,
+        name: member.name,
+        amount: Number(receiveAmount),
+        method: receiveMethod,
+        date: today.toISOString().split("T")[0],
+        time: today.toLocaleTimeString(),
+        timestamp: serverTimestamp(),
+      });
+
+      alert("✅ Payment Received Successfully");
+
+      setShowPaymentModal(false);
+      setReceiveAmount("");
+      setReceiveMethod("Cash");
+
+      // Refresh member data
+      await fetchMemberData();
+
+    } catch (err) {
+      console.error(err);
+      alert("❌ Payment Failed: " + err.message);
+    }
+  };
+
   const formatPKR = (amount) => {
     return new Intl.NumberFormat("ur-PK", {
       style: "currency",
@@ -198,7 +270,7 @@ export default function MemberProfile() {
 
   return (
     <div>
-      {/* ✅ Gold Theme Print Receipt Button - Only */}
+      {/* ✅ Gold Theme Print Receipt Button */}
       <button
         onClick={handlePrint}
         style={{
@@ -227,6 +299,42 @@ export default function MemberProfile() {
         }}
       >
         🧾 Print Receipt
+      </button>
+
+      {/* ✅ Receive Payment Button */}
+      <button
+        onClick={() => {
+          setReceiveAmount(member.monthlyFee || "");
+          setReceiveMethod("Cash");
+          setShowPaymentModal(true);
+        }}
+        style={{
+          background: "linear-gradient(135deg,#00c853,#009624)",
+          color: "#fff",
+          border: "none",
+          padding: "12px 24px",
+          borderRadius: "10px",
+          cursor: "pointer",
+          fontWeight: "bold",
+          fontSize: "15px",
+          transition: "0.3s",
+          boxShadow: "0 2px 10px rgba(0,200,83,0.3)",
+          marginBottom: "20px",
+          marginLeft: "10px",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "translateY(-3px)";
+          e.currentTarget.style.boxShadow = "0 8px 25px rgba(0,200,83,0.5)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "translateY(0px)";
+          e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,200,83,0.3)";
+        }}
+      >
+        💰 Receive Payment
       </button>
 
       {/* ✅ Receipt Component (Hidden) */}
@@ -374,6 +482,130 @@ export default function MemberProfile() {
           </div>
         )}
       </div>
+
+      {/* ✅ Payment Modal */}
+      {showPaymentModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.6)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowPaymentModal(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              width: "420px",
+              background: "#111",
+              padding: "25px",
+              borderRadius: "15px",
+              border: "2px solid gold",
+            }}
+          >
+            <h2 style={{ color: "gold", textAlign: "center", marginBottom: "15px" }}>
+              💰 Receive Payment
+            </h2>
+
+            <p style={{ color: "#fff", marginBottom: "5px" }}>
+              Member : <b style={{ color: "#FFD700" }}>{member.name}</b>
+            </p>
+
+            <p style={{ color: "#fff", marginBottom: "15px" }}>
+              Monthly Fee : <b style={{ color: "#00ff88" }}>Rs. {member.monthlyFee}</b>
+            </p>
+
+            <input
+              type="number"
+              value={receiveAmount}
+              onChange={(e) => setReceiveAmount(e.target.value)}
+              placeholder="Amount"
+              style={{
+                width: "100%",
+                padding: "12px",
+                marginTop: "10px",
+                marginBottom: "15px",
+                background: "#0a0a0a",
+                border: "1px solid #FFD700",
+                borderRadius: "8px",
+                color: "white",
+                fontSize: "14px",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+
+            <select
+              value={receiveMethod}
+              onChange={(e) => setReceiveMethod(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "12px",
+                marginBottom: "15px",
+                background: "#0a0a0a",
+                border: "1px solid #FFD700",
+                borderRadius: "8px",
+                color: "white",
+                fontSize: "14px",
+                outline: "none",
+              }}
+            >
+              <option>Cash</option>
+              <option>Online</option>
+              <option>Card</option>
+              <option>JazzCash / Easypaisa</option>
+            </select>
+
+            <div
+              style={{
+                marginTop: "20px",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "10px",
+              }}
+            >
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  border: "1px solid #6b7280",
+                  color: "#cbd5e1",
+                  padding: "12px 20px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  flex: 1,
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleReceivePayment}
+                style={{
+                  background: "linear-gradient(135deg,#00c853,#009624)",
+                  color: "#fff",
+                  border: "none",
+                  padding: "12px 20px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  flex: 1,
+                }}
+              >
+                Receive Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
