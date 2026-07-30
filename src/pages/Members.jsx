@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { db } from "../firebase";
 import { collection, addDoc, serverTimestamp, updateDoc, doc, runTransaction } from "firebase/firestore";
+import PaymentModal from "../components/PaymentModal";
 
 export default function Members({
   members,
@@ -34,6 +35,8 @@ export default function Members({
   const navigate = useNavigate();
   const [viewFilter, setViewFilter] = useState("all");
   const [isNewAdmission, setIsNewAdmission] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const safeFormatPKR = (amount) => {
     if (formatPKR && typeof formatPKR === 'function') return formatPKR(amount);
@@ -56,7 +59,6 @@ export default function Members({
 
   const handleMarkAttendance = async (member) => {
     const today = new Date().toISOString().split("T")[0];
-    
     try {
       await addDoc(collection(db, "attendanceHistory"), {
         memberId: member.id,
@@ -89,7 +91,6 @@ export default function Members({
     }
   };
 
-  // ✅ UPDATED: Sirf dueDate se Remaining Days calculate karo
   const getRemainingDaysData = (member) => {
     if (member.dueDate) {
       const today = new Date();
@@ -128,7 +129,6 @@ export default function Members({
     setEditingId(null);
   };
 
-  // ✅ UPDATED: handleAddMember with dueDate saved
   const handleAddMember = async () => {
     if (!name || !phone) {
       alert("Name aur Phone likho");
@@ -145,7 +145,6 @@ export default function Members({
     
     try {
       if (editingId) {
-        // ✅ UPDATE: dueDate added
         await updateDoc(doc(db, "members", editingId), { 
           name, phone, plan, 
           feeStatus: finalFeeStatus, 
@@ -153,56 +152,29 @@ export default function Members({
           monthlyFee, 
           paidFee, 
           paidDate: paidDateValue,
-          dueDate: dueDate, // ✅ ADDED
+          dueDate: dueDate,
           isNewAdmission: isNewAdmission,
         });
         alert("✅ Member Updated");
         resetForm();
       } else {
-        // ✅ COUNTER-BASED ID SYSTEM WITH TRANSACTION
         const counterRef = doc(db, "counters", "members");
         
-        console.log("🔄 Starting transaction from Members page...");
-        
         const memberId = await runTransaction(db, async (transaction) => {
-          console.log("📥 Getting counter document...");
           const counterDoc = await transaction.get(counterRef);
-
-          console.log("📄 Counter exists:", counterDoc.exists());
-
           if (!counterDoc.exists()) {
-            console.error("❌ Counter document not found!");
-            throw new Error(
-              "Counter document not found. Please create counters/members."
-            );
+            throw new Error("Counter document not found!");
           }
-
           const lastId = counterDoc.data().lastId || 0;
           const nextId = lastId + 1;
-
-          console.log("🔢 Last ID:", lastId);
-          console.log("🔢 Next ID:", nextId);
-
-          console.log("📝 Updating counter...");
-          transaction.update(counterRef, {
-            lastId: nextId,
-          });
-
-          console.log("✅ Counter update scheduled");
-
+          transaction.update(counterRef, { lastId: nextId });
           return `IBF-${String(nextId).padStart(4, "0")}`;
         });
 
-        console.log("🆕 Generated Member ID:", memberId);
-
-        // ✅ Safety Check: Manual counter update
         await updateDoc(doc(db, "counters", "members"), {
           lastId: parseInt(memberId.replace("IBF-", "")),
         });
 
-        console.log("✅ Counter Updated!");
-
-        // ✅ ADD: dueDate added
         await addDoc(collection(db, "members"), { 
           memberId,
           name, 
@@ -213,7 +185,7 @@ export default function Members({
           monthlyFee, 
           paidFee, 
           paidDate: paidDateValue,
-          dueDate: dueDate, // ✅ ADDED
+          dueDate: dueDate,
           joinDate: new Date().toLocaleDateString(), 
           status: "active",
           isNewAdmission: isNewAdmission,
@@ -234,7 +206,6 @@ export default function Members({
     <div>
       <h1 style={{ textAlign: "center", color: "#FFD700", marginBottom: "25px", fontFamily: "Orbitron, sans-serif" }}>👥 Members Management</h1>
 
-      {/* Add Member Form */}
       <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "center", marginBottom: "20px", background: "rgba(255,215,0,0.05)", padding: "25px", borderRadius: "20px" }}>
         <input placeholder="Member Name" value={name} onChange={(e) => setName(e.target.value)} style={{ background: "#0a0a0a", border: "1px solid #FFD700", color: "white", padding: "12px", borderRadius: "10px", minWidth: "160px" }} />
         <input placeholder="Phone Number" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ background: "#0a0a0a", border: "1px solid #FFD700", color: "white", padding: "12px", borderRadius: "10px", minWidth: "160px" }} />
@@ -270,7 +241,6 @@ export default function Members({
         {editingId && <button onClick={resetForm} style={{ background: "#6b7280", color: "white", border: "none", padding: "12px 25px", borderRadius: "10px", cursor: "pointer" }}>Cancel</button>}
       </div>
 
-      {/* Filter Tabs */}
       <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginBottom: "25px", flexWrap: "wrap" }}>
         <button
           onClick={() => setViewFilter("all")}
@@ -304,12 +274,10 @@ export default function Members({
         </button>
       </div>
 
-      {/* Search Bar */}
       <div style={{ textAlign: "center", marginBottom: "30px" }}>
         <input placeholder="🔍 Search by Name / Phone / ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: "350px", padding: "12px 20px", background: "#0a0a0a", border: "1px solid #FFD700", color: "white", borderRadius: "12px" }} />
       </div>
 
-      {/* Members Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
         {displayMembers.length === 0 ? (
           <p style={{ textAlign: "center", color: "#9ca3af", gridColumn: "1/-1" }}>
@@ -322,7 +290,7 @@ export default function Members({
             const isDueSoon = remainingData.type === "upcoming" && remainingData.days <= 7;
             
             return (
-              <div key={member.id} onClick={() => navigate(`/member/${member.id}`)} style={{ cursor: "pointer", background: "linear-gradient(135deg, #0a0a0a, #0f0f0f)", border: isOverdue ? "2px solid #ff4444" : isDueSoon ? "2px solid #ffcc00" : "1px solid #FFD700", borderRadius: "15px", padding: "20px" }}>
+              <div key={member.id} onClick={() => navigate(`/member/${member.memberId}`)} style={{ cursor: "pointer", background: "linear-gradient(135deg, #0a0a0a, #0f0f0f)", border: isOverdue ? "2px solid #ff4444" : isDueSoon ? "2px solid #ffcc00" : "1px solid #FFD700", borderRadius: "15px", padding: "20px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                   <div>
                     <span style={{ display: "inline-block", background: "rgba(255,215,0,0.15)", color: "#FFD700", padding: "4px 12px", borderRadius: "20px", fontSize: "12px" }}>🆔 {member.memberId || "—"}</span>
@@ -330,25 +298,54 @@ export default function Members({
                       <span style={{ marginLeft: "10px", background: "#00eaff", color: "#0a0a0a", padding: "3px 12px", borderRadius: "12px", fontSize: "10px", fontWeight: "bold" }}>🆕 New</span>
                     )}
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleNewAdmission(member);
-                    }}
-                    style={{
-                      background: member.isNewAdmission ? "rgba(0,234,255,0.2)" : "rgba(255,255,255,0.05)",
-                      border: member.isNewAdmission ? "1px solid #00eaff" : "1px solid #6b7280",
-                      color: member.isNewAdmission ? "#00eaff" : "#9ca3af",
-                      padding: "4px 12px",
-                      borderRadius: "15px",
-                      cursor: "pointer",
-                      fontSize: "11px",
-                      fontWeight: "bold",
-                      transition: "0.3s",
-                    }}
-                  >
-                    {member.isNewAdmission ? "✅ New Admission" : "➕ Mark as New"}
-                  </button>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleNewAdmission(member);
+                      }}
+                      style={{
+                        background: member.isNewAdmission ? "rgba(0,234,255,0.2)" : "rgba(255,255,255,0.05)",
+                        border: member.isNewAdmission ? "1px solid #00eaff" : "1px solid #6b7280",
+                        color: member.isNewAdmission ? "#00eaff" : "#9ca3af",
+                        padding: "4px 12px",
+                        borderRadius: "15px",
+                        cursor: "pointer",
+                        fontSize: "11px",
+                        fontWeight: "bold",
+                        transition: "0.3s",
+                      }}
+                    >
+                      {member.isNewAdmission ? "✅ New" : "➕ Mark New"}
+                    </button>
+                    {/* ✅ Payment Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMember(member);
+                        setShowPaymentModal(true);
+                      }}
+                      style={{
+                        background: "linear-gradient(135deg,#00c853,#009624)",
+                        color: "#fff",
+                        border: "none",
+                        padding: "4px 12px",
+                        borderRadius: "15px",
+                        cursor: "pointer",
+                        fontSize: "11px",
+                        fontWeight: "bold",
+                        transition: "0.3s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = "scale(1.05)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = "scale(1)";
+                      }}
+                    >
+                      💰 Pay
+                    </button>
+                  </div>
                 </div>
                 
                 <h2 style={{ color: "#FFD700" }}>{member.name}</h2>
@@ -381,6 +378,21 @@ export default function Members({
           })
         )}
       </div>
+
+      {/* ✅ Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        member={selectedMember}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setSelectedMember(null);
+        }}
+        onSuccess={() => {
+          setShowPaymentModal(false);
+          setSelectedMember(null);
+          window.location.reload();
+        }}
+      />
     </div>
   );
 }

@@ -8,11 +8,9 @@ import {
   getDocs,
   query,
   where,
-  addDoc,
-  updateDoc,
-  serverTimestamp,
 } from "firebase/firestore";
 import Receipt from "../components/Receipt";
+import PaymentModal from "../components/PaymentModal";
 
 export default function MemberProfile() {
   const { id } = useParams();
@@ -22,11 +20,7 @@ export default function MemberProfile() {
   const [attendance, setAttendance] = useState([]);
   const [loading, setLoading] = useState(true);
   const receiptRef = useRef(null);
-
-  // ✅ Payment Modal States
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [receiveAmount, setReceiveAmount] = useState("");
-  const [receiveMethod, setReceiveMethod] = useState("Cash");
 
   useEffect(() => {
     if (id) {
@@ -39,21 +33,25 @@ export default function MemberProfile() {
 
   const fetchMemberData = async () => {
     try {
-      console.log("Fetching member with ID:", id);
+      console.log("🔍 Fetching member with memberId:", id);
       
-      const memberDoc = await getDoc(doc(db, "members", id));
-      console.log("Member doc exists:", memberDoc.exists());
+      const membersRef = collection(db, "members");
+      const q = query(membersRef, where("memberId", "==", id));
+      const querySnapshot = await getDocs(q);
       
-      if (memberDoc.exists()) {
-        setMember({ id: memberDoc.id, ...memberDoc.data() });
+      if (!querySnapshot.empty) {
+        const doc = querySnapshot.docs[0];
+        const memberData = { id: doc.id, ...doc.data() };
+        console.log("✅ Member found:", memberData);
+        setMember(memberData);
       } else {
-        console.error("Member not found in database");
+        console.error("❌ Member not found with memberId:", id);
         setLoading(false);
         return;
       }
 
       try {
-        const paymentsQuery = query(collection(db, "payments"), where("memberId", "==", id));
+        const paymentsQuery = query(collection(db, "payments"), where("memberCardId", "==", id));
         const paymentsData = await getDocs(paymentsQuery);
         setPayments(paymentsData.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => new Date(b.date) - new Date(a.date)));
       } catch (err) {
@@ -61,7 +59,7 @@ export default function MemberProfile() {
       }
 
       try {
-        const attendanceQuery = query(collection(db, "attendanceHistory"), where("memberId", "==", id));
+        const attendanceQuery = query(collection(db, "attendanceHistory"), where("memberCardId", "==", id));
         const attendanceData = await getDocs(attendanceQuery);
         setAttendance(attendanceData.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => new Date(b.date) - new Date(a.date)));
       } catch (err) {
@@ -75,14 +73,10 @@ export default function MemberProfile() {
     }
   };
 
-  // ✅ handlePrint function
   const handlePrint = () => {
     const receipt = document.getElementById("receipt");
-
     if (!receipt) return;
-
     const printWindow = window.open("", "_blank");
-
     printWindow.document.write(`
       <html>
         <head>
@@ -137,66 +131,8 @@ export default function MemberProfile() {
         </body>
       </html>
     `);
-
     printWindow.document.close();
     printWindow.focus();
-  };
-
-  // ✅ handleReceivePayment function
-  const handleReceivePayment = async () => {
-    if (!receiveAmount || Number(receiveAmount) <= 0) {
-      alert("Please enter a valid amount");
-      return;
-    }
-
-    try {
-      const today = new Date();
-
-      // 1️⃣ Update Member
-      await updateDoc(doc(db, "members", member.id), {
-        paidFee: Number(receiveAmount),
-        paymentMethod: receiveMethod,
-        feeStatus: "Paid",
-        paidDate: today.toISOString().split("T")[0],
-      });
-
-      // 2️⃣ Payment History
-      await addDoc(collection(db, "payments"), {
-        memberId: member.id,
-        memberCardId: member.memberId,
-        name: member.name,
-        amount: Number(receiveAmount),
-        method: receiveMethod,
-        date: today.toISOString().split("T")[0],
-        time: today.toLocaleTimeString(),
-        timestamp: serverTimestamp(),
-      });
-
-      // 3️⃣ Daily Collection
-      await addDoc(collection(db, "dailyReports"), {
-        memberId: member.id,
-        memberCardId: member.memberId,
-        name: member.name,
-        amount: Number(receiveAmount),
-        method: receiveMethod,
-        date: today.toISOString().split("T")[0],
-        time: today.toLocaleTimeString(),
-        timestamp: serverTimestamp(),
-      });
-
-      alert("✅ Payment Received Successfully");
-
-      setShowPaymentModal(false);
-      setReceiveAmount("");
-      setReceiveMethod("Cash");
-
-      // Refresh member data
-      await fetchMemberData();
-
-    } catch (err) {
-      console.error(err);
-      alert("❌ Payment Failed: " + err.message);
-    }
   };
 
   const formatPKR = (amount) => {
@@ -216,49 +152,27 @@ export default function MemberProfile() {
 
   const getRemainingDays = (dueDate) => {
     if (!dueDate) return { text: "Not Set", color: "#9ca3af", type: "not-set" };
-    
     const today = new Date();
     const due = new Date(dueDate);
     today.setHours(0, 0, 0, 0);
     due.setHours(0, 0, 0, 0);
-    
-    const diffTime = due - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays > 0) {
-      return { text: `${diffDays} Days Left`, color: "#00ff88", type: "upcoming" };
-    } else if (diffDays === 0) {
-      return { text: "Due Today", color: "#ffcc00", type: "today" };
-    } else {
-      return { text: `${Math.abs(diffDays)} Days Overdue`, color: "#ff4444", type: "overdue" };
-    }
+    const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) return { text: `${diffDays} Days Left`, color: "#00ff88", type: "upcoming" };
+    if (diffDays === 0) return { text: "Due Today", color: "#ffcc00", type: "today" };
+    return { text: `${Math.abs(diffDays)} Days Overdue`, color: "#ff4444", type: "overdue" };
   };
 
   const getPaymentStatusMessage = () => {
     if (!member) return { text: "", color: "#9ca3af", icon: "" };
-    
     const monthly = Number(member.monthlyFee) || 0;
     const paid = Number(member.paidFee) || 0;
-    
     if (member.feeStatus === "Paid") {
-      return {
-        text: "✅ Payment Completed! Next due in 30 days",
-        color: "#00ff88",
-        icon: "✅"
-      };
+      return { text: "✅ Payment Completed! Next due in 30 days", color: "#00ff88", icon: "✅" };
     } else if (paid > 0 && paid < monthly) {
       const remaining = monthly - paid;
-      return {
-        text: `⚠️ Partial Payment: PKR ${remaining.toLocaleString()} remaining`,
-        color: "#ffcc00",
-        icon: "⚠️"
-      };
+      return { text: `⚠️ Partial Payment: PKR ${remaining.toLocaleString()} remaining`, color: "#ffcc00", icon: "⚠️" };
     } else {
-      return {
-        text: "❌ No payment received yet",
-        color: "#ff4444",
-        icon: "❌"
-      };
+      return { text: "❌ No payment received yet", color: "#ff4444", icon: "❌" };
     }
   };
 
@@ -270,7 +184,6 @@ export default function MemberProfile() {
 
   return (
     <div>
-      {/* ✅ Gold Theme Print Receipt Button */}
       <button
         onClick={handlePrint}
         style={{
@@ -289,25 +202,12 @@ export default function MemberProfile() {
           alignItems: "center",
           gap: "8px",
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = "translateY(-3px)";
-          e.currentTarget.style.boxShadow = "0 8px 25px rgba(255,215,0,0.5)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = "translateY(0px)";
-          e.currentTarget.style.boxShadow = "0 2px 10px rgba(255,215,0,0.3)";
-        }}
       >
         🧾 Print Receipt
       </button>
 
-      {/* ✅ Receive Payment Button */}
       <button
-        onClick={() => {
-          setReceiveAmount(member.monthlyFee || "");
-          setReceiveMethod("Cash");
-          setShowPaymentModal(true);
-        }}
+        onClick={() => setShowPaymentModal(true)}
         style={{
           background: "linear-gradient(135deg,#00c853,#009624)",
           color: "#fff",
@@ -325,20 +225,19 @@ export default function MemberProfile() {
           alignItems: "center",
           gap: "8px",
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = "translateY(-3px)";
-          e.currentTarget.style.boxShadow = "0 8px 25px rgba(0,200,83,0.5)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = "translateY(0px)";
-          e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,200,83,0.3)";
-        }}
       >
         💰 Receive Payment
       </button>
 
-      {/* ✅ Receipt Component (Hidden) */}
       <Receipt member={member} />
+
+      {/* ✅ Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        member={member}
+        onClose={() => setShowPaymentModal(false)}
+        onSuccess={fetchMemberData}
+      />
 
       <div style={{
         background: "linear-gradient(135deg, #0a0a0a, #0f0f0f)",
@@ -354,7 +253,6 @@ export default function MemberProfile() {
         <p style={{ color: "#00ff88", marginTop: "10px" }}>📅 Joined: {member.joinDate}</p>
       </div>
 
-      {/* Stats Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px", marginBottom: "30px" }}>
         <div style={{ background: "rgba(255,215,0,0.05)", border: "1px solid #FFD700", borderRadius: "15px", padding: "20px", textAlign: "center" }}>
           <h3 style={{ color: "#FFD700" }}>💰 Monthly Fee</h3>
@@ -374,7 +272,6 @@ export default function MemberProfile() {
         </div>
       </div>
 
-      {/* Due Date & Remaining Days Section */}
       <div style={{
         background: "rgba(255,215,0,0.08)",
         border: `2px solid ${remainingDays.color}`,
@@ -386,36 +283,27 @@ export default function MemberProfile() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "20px" }}>
           <div>
             <h3 style={{ color: "#FFD700", marginBottom: "10px" }}>📅 Due Date</h3>
-            <p style={{ fontSize: "18px", fontWeight: "bold", color: remainingDays.color }}>
-              {member.dueDate || "Not Set"}
-            </p>
+            <p style={{ fontSize: "18px", fontWeight: "bold", color: remainingDays.color }}>{member.dueDate || "Not Set"}</p>
           </div>
           <div>
             <h3 style={{ color: "#FFD700", marginBottom: "10px" }}>⏳ Status</h3>
-            <p style={{ fontSize: "18px", fontWeight: "bold", color: remainingDays.color }}>
-              {remainingDays.text}
-            </p>
+            <p style={{ fontSize: "18px", fontWeight: "bold", color: remainingDays.color }}>{remainingDays.text}</p>
           </div>
           <div>
             <h3 style={{ color: "#FFD700", marginBottom: "10px" }}>💳 Payment Status</h3>
-            <p style={{ fontSize: "14px", fontWeight: "bold", color: paymentStatus.color }}>
-              {paymentStatus.icon} {paymentStatus.text}
-            </p>
+            <p style={{ fontSize: "14px", fontWeight: "bold", color: paymentStatus.color }}>{paymentStatus.icon} {paymentStatus.text}</p>
           </div>
         </div>
-        
         {remainingDays.type === "overdue" && (
           <div style={{ marginTop: "15px", padding: "10px", background: "rgba(255,68,68,0.1)", borderRadius: "10px" }}>
             <p style={{ color: "#ff4444" }}>⚠️ Please collect payment immediately! Fee is overdue.</p>
           </div>
         )}
-        
         {remainingDays.type === "today" && (
           <div style={{ marginTop: "15px", padding: "10px", background: "rgba(255,204,0,0.1)", borderRadius: "10px" }}>
             <p style={{ color: "#ffcc00" }}>⚠️ Fee is due today! Please collect payment.</p>
           </div>
         )}
-        
         {remainingDays.type === "upcoming" && remainingDays.text !== "Not Set" && (
           <div style={{ marginTop: "15px", padding: "10px", background: "rgba(0,255,136,0.05)", borderRadius: "10px" }}>
             <p style={{ color: "#00ff88" }}>✅ Payment is due in {remainingDays.text.split(" ")[0]} days.</p>
@@ -423,7 +311,6 @@ export default function MemberProfile() {
         )}
       </div>
 
-      {/* Payment History */}
       <div style={{
         background: "rgba(255,215,0,0.05)",
         border: "1px solid rgba(255,215,0,0.3)",
@@ -454,7 +341,6 @@ export default function MemberProfile() {
         )}
       </div>
 
-      {/* Attendance History */}
       <div style={{
         background: "rgba(255,215,0,0.05)",
         border: "1px solid rgba(255,215,0,0.3)",
@@ -482,130 +368,6 @@ export default function MemberProfile() {
           </div>
         )}
       </div>
-
-      {/* ✅ Payment Modal */}
-      {showPaymentModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.6)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 9999,
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowPaymentModal(false);
-            }
-          }}
-        >
-          <div
-            style={{
-              width: "420px",
-              background: "#111",
-              padding: "25px",
-              borderRadius: "15px",
-              border: "2px solid gold",
-            }}
-          >
-            <h2 style={{ color: "gold", textAlign: "center", marginBottom: "15px" }}>
-              💰 Receive Payment
-            </h2>
-
-            <p style={{ color: "#fff", marginBottom: "5px" }}>
-              Member : <b style={{ color: "#FFD700" }}>{member.name}</b>
-            </p>
-
-            <p style={{ color: "#fff", marginBottom: "15px" }}>
-              Monthly Fee : <b style={{ color: "#00ff88" }}>Rs. {member.monthlyFee}</b>
-            </p>
-
-            <input
-              type="number"
-              value={receiveAmount}
-              onChange={(e) => setReceiveAmount(e.target.value)}
-              placeholder="Amount"
-              style={{
-                width: "100%",
-                padding: "12px",
-                marginTop: "10px",
-                marginBottom: "15px",
-                background: "#0a0a0a",
-                border: "1px solid #FFD700",
-                borderRadius: "8px",
-                color: "white",
-                fontSize: "14px",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-
-            <select
-              value={receiveMethod}
-              onChange={(e) => setReceiveMethod(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "12px",
-                marginBottom: "15px",
-                background: "#0a0a0a",
-                border: "1px solid #FFD700",
-                borderRadius: "8px",
-                color: "white",
-                fontSize: "14px",
-                outline: "none",
-              }}
-            >
-              <option>Cash</option>
-              <option>Online</option>
-              <option>Card</option>
-              <option>JazzCash / Easypaisa</option>
-            </select>
-
-            <div
-              style={{
-                marginTop: "20px",
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "10px",
-              }}
-            >
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                style={{
-                  background: "rgba(255,255,255,0.1)",
-                  border: "1px solid #6b7280",
-                  color: "#cbd5e1",
-                  padding: "12px 20px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                  flex: 1,
-                }}
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={handleReceivePayment}
-                style={{
-                  background: "linear-gradient(135deg,#00c853,#009624)",
-                  color: "#fff",
-                  border: "none",
-                  padding: "12px 20px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                  flex: 1,
-                }}
-              >
-                Receive Payment
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
