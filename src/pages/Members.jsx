@@ -1,8 +1,9 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { db } from "../firebase";
 import { collection, addDoc, serverTimestamp, updateDoc, doc, runTransaction } from "firebase/firestore";
 import PaymentModal from "../components/PaymentModal";
+import Receipt from "../components/Receipt";
 
 export default function Members({
   members,
@@ -37,6 +38,7 @@ export default function Members({
   const [isNewAdmission, setIsNewAdmission] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const receiptRef = useRef(null);
 
   const safeFormatPKR = (amount) => {
     if (formatPKR && typeof formatPKR === 'function') return formatPKR(amount);
@@ -89,6 +91,149 @@ export default function Members({
       console.error("Error updating new admission:", error);
       alert("Error updating!");
     }
+  };
+
+  // ✅ Print Slip Function
+  const handlePrintSlip = (member) => {
+    // Create a temporary div with receipt content
+    const receiptContent = document.createElement("div");
+    receiptContent.id = "temp-receipt";
+    receiptContent.style.display = "none";
+    document.body.appendChild(receiptContent);
+
+    // Render Receipt component content manually
+    const formatPKR = (amount) => {
+      return new Intl.NumberFormat("ur-PK", {
+        style: "currency",
+        currency: "PKR",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount || 0);
+    };
+
+    receiptContent.innerHTML = `
+      <div id="receipt" style="width:700px;margin:20px auto;background:#fff;color:#000;padding:30px;font-family:Arial;border:2px solid #000;border-radius:8px;">
+        <div style="text-align:center;margin-bottom:0;">
+          <h1 style="margin-bottom:0;font-size:28px;">🏋️ IBRAAJ FITNESS</h1>
+          <h3 style="margin-top:5px;color:#333;">PAYMENT RECEIPT</h3>
+        </div>
+        <hr style="border:1px solid #000;margin:15px 0;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tbody>
+            <tr>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;font-weight:bold;color:#555;width:40%;"><b>Member ID</b></td>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;text-align:right;">${member.memberId}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;font-weight:bold;color:#555;"><b>Name</b></td>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;text-align:right;">${member.name}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;font-weight:bold;color:#555;"><b>Phone</b></td>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;text-align:right;">${member.phone}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;font-weight:bold;color:#555;"><b>Plan</b></td>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;text-align:right;">${member.plan}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;font-weight:bold;color:#555;"><b>Monthly Fee</b></td>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;text-align:right;">${formatPKR(member.monthlyFee)}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;font-weight:bold;color:#555;"><b>Paid Fee</b></td>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;text-align:right;font-weight:bold;color:#00a651;">${formatPKR(member.paidFee)}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;font-weight:bold;color:#555;"><b>Payment Method</b></td>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;text-align:right;">${member.paymentMethod || "Cash"}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;font-weight:bold;color:#555;"><b>Due Date</b></td>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;text-align:right;">${member.dueDate || "Not Set"}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;font-weight:bold;color:#555;"><b>Status</b></td>
+              <td style="padding:8px 5px;border-bottom:1px solid #eee;text-align:right;">
+                <span style="color:${member.feeStatus === "Paid" ? "#00a651" : "#ff0000"};font-weight:bold;">
+                  ${member.feeStatus}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <hr style="border:1px solid #000;margin:15px 0;">
+        <div style="text-align:center;margin-top:20px;">
+          <h3 style="margin:5px 0;color:#333;">Thank You For Choosing</h3>
+          <h2 style="margin:5px 0;font-size:24px;">IBRAAJ FITNESS 💪</h2>
+          <p style="margin-top:10px;color:#888;font-size:12px;">
+            Generated: ${new Date().toLocaleString()}
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Print the receipt
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>IBRAAJ FITNESS Receipt</title>
+          <style>
+            body { margin: 0; padding: 0; font-family: Arial, sans-serif; background: #fff; }
+            #receipt {
+              width: 700px;
+              margin: 20px auto;
+              background: #fff;
+              color: #000;
+              padding: 30px;
+              border: 2px solid #000;
+              border-radius: 8px;
+            }
+            table { width: 100%; border-collapse: collapse; }
+            td { padding: 8px 5px; border-bottom: 1px solid #eee; }
+            td:first-child { font-weight: bold; color: #555; width: 40%; }
+            td:last-child { text-align: right; }
+            hr { border: 1px solid #000; margin: 15px 0; }
+            .header { text-align: center; }
+            .header h1 { margin-bottom: 0; color: #000; }
+            .header h3 { margin-top: 5px; color: #333; }
+            .footer { text-align: center; margin-top: 20px; }
+            .footer h3 { margin: 5px 0; }
+            .status-paid { color: #00a651; font-weight: bold; }
+            .status-unpaid { color: #ff0000; font-weight: bold; }
+            @media print {
+              body { margin: 0; padding: 0; }
+              #receipt { 
+                border: 2px solid #000; 
+                border-radius: 0;
+                margin: 0 auto;
+                width: 100%;
+                max-width: 700px;
+                box-shadow: none;
+              }
+              .no-print { display: none !important; }
+            }
+          </style>
+        </head>
+        <body>
+          ${receiptContent.innerHTML}
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1000);
+            };
+          <\/script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+
+    // Cleanup
+    document.body.removeChild(receiptContent);
   };
 
   const getRemainingDaysData = (member) => {
@@ -298,7 +443,7 @@ export default function Members({
                       <span style={{ marginLeft: "10px", background: "#00eaff", color: "#0a0a0a", padding: "3px 12px", borderRadius: "12px", fontSize: "10px", fontWeight: "bold" }}>🆕 New</span>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: "6px" }}>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -318,7 +463,6 @@ export default function Members({
                     >
                       {member.isNewAdmission ? "✅ New" : "➕ Mark New"}
                     </button>
-                    {/* ✅ Payment Button */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -344,6 +488,34 @@ export default function Members({
                       }}
                     >
                       💰 Pay
+                    </button>
+                    {/* ✅ Print Slip Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePrintSlip(member);
+                      }}
+                      style={{
+                        background: "linear-gradient(135deg, #FFD700, #B8860B)",
+                        color: "#0a0a0a",
+                        border: "none",
+                        padding: "4px 12px",
+                        borderRadius: "15px",
+                        cursor: "pointer",
+                        fontSize: "11px",
+                        fontWeight: "bold",
+                        transition: "0.3s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = "scale(1.05)";
+                        e.currentTarget.style.boxShadow = "0 0 10px rgba(255,215,0,0.3)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = "scale(1)";
+                        e.currentTarget.style.boxShadow = "none";
+                      }}
+                    >
+                      🧾 Slip
                     </button>
                   </div>
                 </div>
@@ -379,7 +551,7 @@ export default function Members({
         )}
       </div>
 
-      {/* ✅ Payment Modal */}
+      {/* Payment Modal */}
       <PaymentModal
         isOpen={showPaymentModal}
         member={selectedMember}
