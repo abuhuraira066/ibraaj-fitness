@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import html2pdf from "html2pdf.js";
 import { db } from "../firebase";
 import { collection, getDocs, updateDoc, doc, writeBatch } from "firebase/firestore";
+import * as XLSX from "xlsx"; // ✅ Step 1 - Excel import
 
 export default function Reports({
   members,
@@ -83,6 +84,50 @@ export default function Reports({
       return getNewAdmissions();
     }
     return safeMembers.filter(m => m?.plan === planName);
+  };
+
+  // ✅ Step 2 - Excel Export Function (Fresh data from Firebase)
+  const exportMembersExcel = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "members"));
+
+      const membersData = snapshot.docs.map((doc) => {
+        const m = doc.data();
+
+        return {
+          "Member ID": m.memberId || "",
+          "Name": m.name || "",
+          "Phone": m.phone || "",
+          "Plan": m.plan || "",
+          "Monthly Fee": Number(m.monthlyFee) || 0,
+          "Paid Fee": Number(m.paidFee) || 0,
+          "Fee Status": m.feeStatus || "",
+          "Payment Method": m.paymentMethod || "",
+          "Due Date": m.dueDate || "",
+          "Join Date": m.joinDate || "",
+        };
+      });
+
+      if (membersData.length === 0) {
+        alert("No members found.");
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(membersData);
+      const workbook = XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Members");
+
+      XLSX.writeFile(
+        workbook,
+        `IBRAAJ_FITNESS_Members_${new Date().toISOString().split("T")[0]}.xlsx`
+      );
+
+      alert(`✅ ${membersData.length} members exported successfully!`);
+    } catch (error) {
+      console.error("Excel export error:", error);
+      alert("❌ Failed to export members.");
+    }
   };
 
   // ✅ Reset New Admissions
@@ -320,6 +365,33 @@ export default function Reports({
 
       {/* Action Buttons Row */}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+        {/* ✅ Step 3 - Excel Export Button */}
+        <button
+          onClick={exportMembersExcel}
+          style={{
+            background: "linear-gradient(135deg, #00c853, #009624)",
+            color: "white",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            fontSize: "13px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            transition: "0.3s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "scale(1.05)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "scale(1)";
+          }}
+        >
+          📊 Export Members Excel
+        </button>
+        
         <button
           onClick={downloadPDF}
           style={{
